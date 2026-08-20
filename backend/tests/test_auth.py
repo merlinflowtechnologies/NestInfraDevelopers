@@ -65,11 +65,15 @@ class TestAuth:
         assert u is not None
         assert u["password_hash"].startswith("$2b$"), u["password_hash"][:10]
 
-    def test_brute_force_lockout(self, anon, base_url, admin_creds):
-        """Playbook requirement: lockout after 5 failed attempts."""
+    def test_brute_force_lockout(self, anon, base_url):
+        """Playbook requirement: lockout after 5 failed attempts.
+
+        Uses a throwaway identifier so real accounts are not locked for 15 min.
+        """
+        victim = "TEST_lockout_probe@example.test"
         codes = []
         for _ in range(6):
-            r = anon.post(f"{base_url}/api/auth/login", json={"identifier": admin_creds["identifier"], "password": "BadPass!123"})
+            r = anon.post(f"{base_url}/api/auth/login", json={"identifier": victim, "password": "BadPass!123"})
             codes.append(r.status_code)
         assert 429 in codes or 423 in codes, f"No lockout after 6 failures, codes={codes}"
 

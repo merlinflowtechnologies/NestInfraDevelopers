@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -26,10 +26,10 @@ export default function Salary() {
   const [form, setForm] = useState({ open: false, initial: null });
   const [del, setDel] = useState(null);
 
-  const load = () => api.get(`/salary${month ? `?month=${month}` : ""}`).then((r) => setRows(r.data));
+  const load = useCallback(() => api.get(`/salary${month ? `?month=${month}` : ""}`).then((r) => setRows(r.data)), [month]);
   useEffect(() => {
     load();
-  }, [month]);
+  }, [load]);
 
   const total = rows.reduce((s, r) => s + (r.net || 0), 0);
 

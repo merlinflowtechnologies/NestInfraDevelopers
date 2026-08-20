@@ -2,19 +2,13 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: `${process.env.REACT_APP_BACKEND_URL}/api`,
-});
-
-api.interceptors.request.use((cfg) => {
-  const t = localStorage.getItem("nest_token");
-  if (t) cfg.headers.Authorization = `Bearer ${t}`;
-  return cfg;
+  withCredentials: true,
 });
 
 api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem("nest_token");
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }

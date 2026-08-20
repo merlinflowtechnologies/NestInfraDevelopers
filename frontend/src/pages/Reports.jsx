@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Download, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
 import api, { downloadFile, errMsg } from "../lib/api";
@@ -21,6 +21,49 @@ const REPORTS = [
 
 const MONEY_KEYS = ["Sale Amount", "Collected", "Balance", "Sales", "Collection", "Commission", "Amount", "Basic", "Bonus", "Deduction", "Net Salary", "Price", "Sales Value", "Outstanding", "Salaries", "Expenses", "Estimated Profit", "Collections", "Eligible Amount", "Agent Commission", "Agent Paid", "Agent Pending", "Team/Leader Commission", "Team Paid", "Team Pending"];
 
+const PRINT_CSS =
+  "body{font-family:sans-serif;padding:24px}h1{font-size:18px}p{color:#666;font-size:12px}" +
+  "table{border-collapse:collapse;width:100%;margin-top:16px}" +
+  "td,th{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;text-align:left}th{background:#f1f5f9}";
+
+function buildPrintDocument(doc, title, cols, rows, fmtCell) {
+  const style = doc.createElement("style");
+  style.textContent = PRINT_CSS;
+  doc.head.appendChild(style);
+
+  const h1 = doc.createElement("h1");
+  h1.textContent = `NEST INFRA DEVELOPERS — ${title}`;
+  const meta = doc.createElement("p");
+  meta.textContent = `Generated: ${new Date().toLocaleString("en-IN")}`;
+
+  const table = doc.createElement("table");
+  const headRow = doc.createElement("tr");
+  cols.forEach((c) => {
+    const th = doc.createElement("th");
+    th.textContent = c;
+    headRow.appendChild(th);
+  });
+  const thead = doc.createElement("thead");
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = doc.createElement("tbody");
+  rows.forEach((r) => {
+    const tr = doc.createElement("tr");
+    cols.forEach((c) => {
+      const td = doc.createElement("td");
+      td.textContent = fmtCell(c, r[c]);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  doc.body.appendChild(h1);
+  doc.body.appendChild(meta);
+  doc.body.appendChild(table);
+}
+
 export default function Reports() {
   const { user } = useAuth();
   const isAdmin = user.role === "admin";
@@ -39,9 +82,9 @@ export default function Reports() {
     api.get("/projects").then((r) => setProjects(r.data));
     api.get("/teams").then((r) => setTeams(r.data));
     if (isAdmin) api.get("/agents").then((r) => setAgents(r.data));
-  }, []);
+  }, [isAdmin]);
 
-  const qs = () => {
+  const qs = useCallback(() => {
     const p = new URLSearchParams();
     if (month) p.set("month", month);
     if (agent) p.set("agent", agent);
@@ -49,9 +92,9 @@ export default function Reports() {
     if (project) p.set("project", project);
     const s = p.toString();
     return s ? `?${s}` : "";
-  };
+  }, [month, agent, team, project]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setBusy(true);
     try {
       const r = await api.get(`/reports/${rtype}${qs()}`);
@@ -61,7 +104,7 @@ export default function Reports() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [rtype, qs]);
 
   useEffect(() => {
     setRows(null);
@@ -71,19 +114,12 @@ export default function Reports() {
   const label = visibleReports.find((r) => r.value === rtype)?.label || rtype;
   const cols = rows && rows.length ? Object.keys(rows[0]) : [];
   const fmtCell = (k, v) => (MONEY_KEYS.includes(k) && typeof v === "number" ? inr(v) : String(v ?? "-"));
+  const rowKey = (r, i) => `${i}-${cols.map((c) => String(r[c])).join("|")}`;
 
   const printReport = () => {
     const w = window.open("", "_blank");
-    const body = rows
-      .map((r) => `<tr>${cols.map((c) => `<td>${fmtCell(c, r[c])}</td>`).join("")}</tr>`)
-      .join("");
-    w.document.write(`<html><head><title>${label}</title><style>
-      body{font-family:sans-serif;padding:24px} h1{font-size:18px} p{color:#666;font-size:12px}
-      table{border-collapse:collapse;width:100%;margin-top:16px} td,th{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;text-align:left}
-      th{background:#f1f5f9}</style></head><body>
-      <h1>NEST INFRA DEVELOPERS — ${label}</h1><p>Generated: ${new Date().toLocaleString("en-IN")}</p>
-      <table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></body></html>`);
-    w.document.close();
+    if (!w) return;
+    buildPrintDocument(w.document, label, cols, rows, fmtCell);
     w.print();
   };
 
@@ -146,7 +182,7 @@ export default function Reports() {
                 <tr><td colSpan="10" className="px-4 py-10 text-center text-slate-400">No data for selected filters</td></tr>
               ) : (
                 rows.map((r, i) => (
-                  <tr key={i} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`report-row-${i}`}>
+                  <tr key={rowKey(r, i)} className="border-t border-slate-100 hover:bg-slate-50" data-testid={`report-row-${i}`}>
                     {cols.map((c) => (
                       <td key={c} className={`whitespace-nowrap px-4 py-2.5 ${typeof r[c] === "number" ? "text-right font-num" : "text-slate-700"}`}>
                         {fmtCell(c, r[c])}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -18,13 +18,13 @@ export default function Payments() {
   const [formOpen, setFormOpen] = useState(false);
   const [del, setDel] = useState(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get(`/payments${month ? `?month=${month}` : ""}`).then((r) => setPayments(r.data));
     api.get("/sales").then((r) => setSales(r.data.filter((s) => s.status !== "cancelled")));
-  };
+  }, [month]);
   useEffect(() => {
     load();
-  }, [month]);
+  }, [load]);
 
   const total = payments.reduce((s, p) => s + p.amount, 0);
   const monthTotal = payments.filter((p) => p.month === currentMonth()).reduce((s, p) => s + p.amount, 0);

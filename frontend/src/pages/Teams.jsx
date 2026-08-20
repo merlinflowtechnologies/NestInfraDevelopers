@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Target } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -22,13 +22,13 @@ export default function Teams() {
   const [del, setDel] = useState(null);
   const month = currentMonth();
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get(`/teams?month=${month}`).then((r) => setTeams(r.data));
     if (isAdmin) api.get("/agents").then((r) => setAgents(r.data));
-  };
+  }, [isAdmin, month]);
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const submit = async (v) => {
     const payload = { name: v.name, leader_code: v.leader_code || "", monthly_target: parseFloat(v.monthly_target) || 0 };

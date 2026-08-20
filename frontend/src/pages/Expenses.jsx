@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -17,14 +17,14 @@ export default function Expenses() {
   const [form, setForm] = useState({ open: false, initial: null });
   const [del, setDel] = useState(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get(`/expenses${month ? `?month=${month}` : ""}`).then((r) => setRows(r.data));
     api.get("/projects").then((r) => setProjects(r.data));
     api.get("/teams").then((r) => setTeams(r.data));
-  };
+  }, [month]);
   useEffect(() => {
     load();
-  }, [month]);
+  }, [load]);
 
   const total = rows.reduce((s, r) => s + r.amount, 0);
   const isMarketing = (r) => ["Marketing", "Google Ads", "Meta Ads"].includes(r.category);

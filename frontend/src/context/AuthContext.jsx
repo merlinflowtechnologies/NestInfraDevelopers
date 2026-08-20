@@ -9,11 +9,6 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // null = checking, false = logged out
 
   useEffect(() => {
-    const t = localStorage.getItem("nest_token");
-    if (!t) {
-      setUser(false);
-      return;
-    }
     api
       .get("/auth/me")
       .then((r) => setUser(r.data))
@@ -22,13 +17,16 @@ export function AuthProvider({ children }) {
 
   const login = async (identifier, password) => {
     const r = await api.post("/auth/login", { identifier, password });
-    localStorage.setItem("nest_token", r.data.token);
     setUser(r.data.user);
     return r.data.user;
   };
 
-  const logout = () => {
-    localStorage.removeItem("nest_token");
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      /* session already gone */
+    }
     setUser(false);
     window.location.href = "/login";
   };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -18,17 +18,17 @@ export default function Sales() {
   const [form, setForm] = useState({ open: false, initial: null });
   const [del, setDel] = useState(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     let url = "/sales?";
     if (month) url += `month=${month}&`;
     if (projectFilter) url += `project_id=${projectFilter}`;
     api.get(url).then((r) => setSales(r.data));
     api.get("/projects").then((r) => setProjects(r.data));
     if (isAdmin) api.get("/agents").then((r) => setAgents(r.data));
-  };
+  }, [month, projectFilter, isAdmin]);
   useEffect(() => {
     load();
-  }, [month, projectFilter]);
+  }, [load]);
 
   const fields = [
     { name: "date", label: "Date", type: "date", required: true },

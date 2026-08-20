@@ -24,7 +24,7 @@ export default function Dashboard() {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse" data-testid="dashboard-loading">
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="h-28 rounded-lg bg-slate-200" />
+          <div key={`skel-${i}`} className="h-28 rounded-lg bg-slate-200" />
         ))}
       </div>
     );

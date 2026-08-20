@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, IndianRupee } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -23,14 +23,14 @@ export default function Commission() {
   const [del, setDel] = useState(null);
   const [pay, setPay] = useState(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get("/commission-rules").then((r) => setRules(r.data));
     api.get("/sales").then((r) => setSales(r.data.filter((s) => s.status !== "cancelled")));
     api.get("/projects").then((r) => setProjects(r.data));
-  };
+  }, []);
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const fields = [
     { name: "name", label: "Rule Name", required: true, placeholder: "Agent Commission 2%" },

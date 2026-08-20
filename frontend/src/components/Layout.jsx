@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, Users, UsersRound, Handshake, IndianRupee,
   Percent, Wallet, Receipt, Calculator, FileBarChart, Upload, Menu, LogOut, Landmark,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { useAuth } from "../context/AuthContext";
 
 const NAV = [
@@ -22,7 +22,7 @@ const NAV = [
   { to: "/admin", label: "Admin Upload", icon: Upload, admin: true, testid: "nav-admin" },
 ];
 
-function NavItems({ user, onNavigate }) {
+function NavItems({ user, onNavigate, suffix = "" }) {
   return (
     <nav className="flex-1 space-y-1 px-3 py-4">
       {NAV.filter((n) => !n.admin || user.role === "admin").map((n) => (
@@ -31,7 +31,7 @@ function NavItems({ user, onNavigate }) {
           to={n.to}
           end={n.to === "/"}
           onClick={onNavigate}
-          data-testid={n.testid}
+          data-testid={`${n.testid}${suffix}`}
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
               isActive
@@ -66,13 +66,13 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const userBlock = (
+  const userBlock = (suffix = "") => (
     <div className="border-t border-slate-800 p-4">
       <p className="text-sm font-semibold text-white">{user.name}</p>
       <p className="text-xs text-slate-400 capitalize">{user.role}{user.agent_code ? ` · ${user.agent_code}` : ""}</p>
       <button
         onClick={logout}
-        data-testid="logout-button"
+        data-testid={`logout-button${suffix}`}
         className="mt-3 flex w-full items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition-colors duration-150 hover:bg-slate-800 hover:text-white"
       >
         <LogOut className="h-3.5 w-3.5" /> Sign out
@@ -86,7 +86,7 @@ export default function Layout() {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-slate-900 md:flex">
         <Brand />
         <NavItems user={user} />
-        {userBlock}
+        {userBlock()}
       </aside>
 
       {/* Mobile top bar */}
@@ -103,10 +103,11 @@ export default function Layout() {
               <Menu className="h-5 w-5" />
             </button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 bg-slate-900 p-0 border-slate-800 flex flex-col">
+          <SheetContent side="left" className="w-64 bg-slate-900 p-0 border-slate-800 flex flex-col [&>button]:text-slate-300 [&>button]:hover:text-white">
+            <SheetTitle className="sr-only">Navigation menu</SheetTitle>
             <Brand />
-            <NavItems user={user} onNavigate={() => setOpen(false)} />
-            {userBlock}
+            <NavItems user={user} onNavigate={() => setOpen(false)} suffix="-mobile" />
+            {userBlock("-mobile")}
           </SheetContent>
         </Sheet>
       </div>

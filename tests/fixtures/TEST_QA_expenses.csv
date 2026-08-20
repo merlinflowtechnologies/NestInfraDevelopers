@@ -1,0 +1,3 @@
+date,category,description,project,amount,mode,paid_by
+2026-08-21,Marketing,TEST_QA upload expense,,5000,cash,QA
+2026-08-22,Office,TEST_QA upload expense 2,,7500,upi,QA

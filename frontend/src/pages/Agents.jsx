@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -32,13 +32,13 @@ export default function Agents() {
   const [view, setView] = useState(null);
   const [dash, setDash] = useState(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get("/agents").then((r) => setAgents(r.data));
     api.get("/teams").then((r) => setTeams(r.data));
-  };
+  }, []);
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     if (view) api.get(`/agents/${view.agent_code}/dashboard?month=${currentMonth()}`).then((r) => setDash(r.data));
@@ -104,7 +104,7 @@ export default function Agents() {
             </DialogTitle>
           </DialogHeader>
           {!dash ? (
-            <div className="grid grid-cols-2 gap-3 animate-pulse">{[...Array(6)].map((_, i) => <div key={i} className="h-16 rounded-md bg-slate-100" />)}</div>
+            <div className="grid grid-cols-2 gap-3 animate-pulse">{[...Array(6)].map((_, i) => <div key={`skel-${i}`} className="h-16 rounded-md bg-slate-100" />)}</div>
           ) : (
             <>
               <p className="text-xs text-slate-400">Monthly figures for {monthLabel(dash.month)}</p>

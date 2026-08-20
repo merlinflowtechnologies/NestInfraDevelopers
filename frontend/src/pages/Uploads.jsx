@@ -150,7 +150,7 @@ export default function Uploads() {
                 {preview.rows.map((r, i) => {
                   const st = rowState(i);
                   return (
-                    <tr key={i} className={st === "error" ? "bg-red-50" : st === "dup" ? "bg-amber-50" : ""} data-testid={`preview-row-${i}`}>
+                    <tr key={`${i}-${Object.values(r).slice(0, 3).join("-")}`} className={st === "error" ? "bg-red-50" : st === "dup" ? "bg-amber-50" : ""} data-testid={`preview-row-${i}`}>
                       <td className="px-3 py-1.5 font-num text-slate-400">{i + 2}</td>
                       {cols.map((c) => <td key={c} className="whitespace-nowrap px-3 py-1.5 text-slate-700">{String(r[c] ?? "")}</td>)}
                     </tr>

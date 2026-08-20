@@ -1,5 +1,6 @@
 import io
 from typing import List
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import pandas as pd
@@ -47,6 +48,10 @@ def s(v):
     return str(v).strip() if v is not None else ""
 
 
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
+
 def normalize_rows(df: pd.DataFrame) -> list:
     df.columns = [str(c).strip().lower().replace(" ", "_").replace("/", "_") for c in df.columns]
     rows = []
@@ -63,6 +68,60 @@ def normalize_rows(df: pd.DataFrame) -> list:
                 r[k] = v
         rows.append(r)
     return rows
+
+
+def required_errors(entity: str, rows: list) -> list:
+    errors = []
+    for i, row in enumerate(rows):
+        missing = [c for c in REQUIRED[entity] if s(row.get(c)) == ""]
+        if missing:
+            errors.append({"row": i + 2, "message": f"Missing required: {', '.join(missing)}"})
+    return errors
+
+
+DUP_MESSAGES = {
+    "projects": lambda r: f"Project '{s(r.get('name'))}' already exists",
+    "agents": lambda r: f"Agent code '{s(r.get('agent_code')).upper()}' already exists",
+    "teams": lambda r: f"Team '{s(r.get('name'))}' already exists",
+    "sales": lambda r: f"Plot {s(r.get('plot_number'))} already sold/booked",
+    "salary": lambda r: f"Salary for {s(r.get('employee'))} in {s(r.get('month'))} exists",
+}
+
+
+async def is_duplicate(entity: str, row: dict) -> bool:
+    if entity == "projects":
+        return await db.projects.find_one({"name": s(row.get("name"))}) is not None
+    if entity == "agents":
+        return await db.agents.find_one({"agent_code": s(row.get("agent_code")).upper()}) is not None
+    if entity == "teams":
+        return await db.teams.find_one({"name": s(row.get("name"))}) is not None
+    if entity == "salary":
+        return await db.salary.find_one({"month": s(row.get("month"))[:7], "employee": s(row.get("employee"))}) is not None
+    if entity == "sales":
+        p = await db.projects.find_one({"name": s(row.get("project"))})
+        if p:
+            return await db.sales.find_one({"project_id": str(p["_id"]), "plot_number": s(row.get("plot_number")), "status": {"$ne": "cancelled"}}) is not None
+    return False
+
+
+async def find_duplicates(entity: str, rows: list) -> list:
+    if entity not in DUP_MESSAGES:
+        return []
+    duplicates = []
+    for i, row in enumerate(rows):
+        if await is_duplicate(entity, row):
+            duplicates.append({"row": i + 2, "message": DUP_MESSAGES[entity](row)})
+    return duplicates
+
+
+async def reference_errors(entity: str, rows: list) -> list:
+    if entity != "sales":
+        return []
+    errors = []
+    for i, row in enumerate(rows):
+        if s(row.get("project")) and not await db.projects.find_one({"name": s(row.get("project"))}):
+            errors.append({"row": i + 2, "message": f"Project '{s(row.get('project'))}' not found"})
+    return errors
 
 
 @router.get("/upload/template-info")
@@ -83,39 +142,8 @@ async def upload_preview(entity: str, file: UploadFile = File(...), user=Depends
     except Exception as e:
         raise HTTPException(400, f"Could not parse file: {e}")
     rows = normalize_rows(df)
-    required = REQUIRED[entity]
-    errors = []
-    for i, row in enumerate(rows):
-        missing = [c for c in required if s(row.get(c)) == ""]
-        if missing:
-            errors.append({"row": i + 2, "message": f"Missing required: {', '.join(missing)}"})
-    duplicates = []
-    if entity == "projects":
-        names = [s(r.get("name")) for r in rows]
-        existing = {p["name"] async for p in db.projects.find({"name": {"$in": names}})}
-        duplicates = [{"row": i + 2, "message": f"Project '{n}' already exists"} for i, n in enumerate(names) if n in existing]
-    elif entity == "agents":
-        codes = [s(r.get("agent_code")).upper() for r in rows]
-        existing = {a["agent_code"] async for a in db.agents.find({"agent_code": {"$in": codes}})}
-        duplicates = [{"row": i + 2, "message": f"Agent code '{c}' already exists"} for i, c in enumerate(codes) if c in existing]
-    elif entity == "teams":
-        names = [s(r.get("name")) for r in rows]
-        existing = {t["name"] async for t in db.teams.find({"name": {"$in": names}})}
-        duplicates = [{"row": i + 2, "message": f"Team '{n}' already exists"} for i, n in enumerate(names) if n in existing]
-    elif entity == "sales":
-        for i, r in enumerate(rows):
-            p = await db.projects.find_one({"name": s(r.get("project"))})
-            if not p:
-                errors.append({"row": i + 2, "message": f"Project '{s(r.get('project'))}' not found"})
-            else:
-                dup = await db.sales.find_one({"project_id": str(p["_id"]), "plot_number": s(r.get("plot_number")), "status": {"$ne": "cancelled"}})
-                if dup:
-                    duplicates.append({"row": i + 2, "message": f"Plot {s(r.get('plot_number'))} already sold/booked"})
-    elif entity == "salary":
-        for i, r in enumerate(rows):
-            dup = await db.salary.find_one({"month": s(r.get("month")), "employee": s(r.get("employee"))})
-            if dup:
-                duplicates.append({"row": i + 2, "message": f"Salary for {s(r.get('employee'))} in {s(r.get('month'))} exists"})
+    errors = required_errors(entity, rows) + await reference_errors(entity, rows)
+    duplicates = await find_duplicates(entity, rows)
     err_rows = {e["row"] for e in errors}
     dup_rows = {d["row"] for d in duplicates}
     return {
@@ -133,22 +161,6 @@ class ConfirmBody(BaseModel):
     rows: List[dict]
 
 
-async def is_duplicate(entity: str, row: dict) -> bool:
-    if entity == "projects":
-        return await db.projects.find_one({"name": s(row.get("name"))}) is not None
-    if entity == "agents":
-        return await db.agents.find_one({"agent_code": s(row.get("agent_code")).upper()}) is not None
-    if entity == "teams":
-        return await db.teams.find_one({"name": s(row.get("name"))}) is not None
-    if entity == "salary":
-        return await db.salary.find_one({"month": s(row.get("month"))[:7], "employee": s(row.get("employee"))}) is not None
-    if entity == "sales":
-        p = await db.projects.find_one({"name": s(row.get("project"))})
-        if p:
-            return await db.sales.find_one({"project_id": str(p["_id"]), "plot_number": s(row.get("plot_number")), "status": {"$ne": "cancelled"}}) is not None
-    return False
-
-
 @router.post("/upload/{entity}/confirm")
 async def upload_confirm(entity: str, body: ConfirmBody, user=Depends(require_admin)):
     if entity not in ENTITIES:
@@ -163,7 +175,7 @@ async def upload_confirm(entity: str, body: ConfirmBody, user=Depends(require_ad
             failed.append({"row": i + 2, "error": "Duplicate record — already exists"})
             continue
         try:
-            await insert_row(entity, row)
+            await INSERTERS[entity](row)
             inserted += 1
         except HTTPException as e:
             failed.append({"row": i + 2, "error": e.detail})
@@ -172,98 +184,121 @@ async def upload_confirm(entity: str, body: ConfirmBody, user=Depends(require_ad
     return {"inserted": inserted, "failed": failed}
 
 
-async def insert_row(entity: str, row: dict):
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+# ---------------- Row inserters ----------------
+async def _ins_projects(row: dict):
+    total = int(fnum(row.get("total_plots")))
+    images = [i.strip() for i in s(row.get("images")).split(";") if i.strip()]
+    await db.projects.insert_one({
+        "name": s(row.get("name")), "location": s(row.get("location")),
+        "project_type": s(row.get("project_type")), "price": fnum(row.get("price")),
+        "plot_sizes": s(row.get("plot_sizes")), "total_plots": total,
+        "available_plots": total, "booked_plots": 0, "sold_plots": 0,
+        "images": images, "description": s(row.get("description")), "map_url": s(row.get("map_url")),
+        "created_at": _now(),
+    })
 
-    if entity == "projects":
-        total = int(fnum(row.get("total_plots")))
-        images = [i.strip() for i in s(row.get("images")).split(";") if i.strip()]
-        await db.projects.insert_one({
-            "name": s(row.get("name")), "location": s(row.get("location")),
-            "project_type": s(row.get("project_type")), "price": fnum(row.get("price")),
-            "plot_sizes": s(row.get("plot_sizes")), "total_plots": total,
-            "available_plots": total, "booked_plots": 0, "sold_plots": 0,
-            "images": images, "description": s(row.get("description")), "map_url": s(row.get("map_url")),
-            "created_at": now,
-        })
-    elif entity == "agents":
-        code = s(row.get("agent_code")).upper()
-        team_id = ""
-        if s(row.get("team")):
-            t = await db.teams.find_one({"name": s(row.get("team"))})
-            team_id = str(t["_id"]) if t else ""
-        await db.agents.insert_one({
-            "agent_code": code, "name": s(row.get("name")), "mobile": s(row.get("mobile")),
-            "team_id": team_id, "designation": s(row.get("designation")),
-            "joining_date": s(row.get("joining_date")), "commission_plan": s(row.get("commission_plan")),
-            "status": s(row.get("status")) or "active", "created_at": now,
-        })
-        await ensure_agent_user(code, s(row.get("name")), s(row.get("password")))
-    elif entity == "teams":
-        await db.teams.insert_one({
-            "name": s(row.get("name")), "leader_code": s(row.get("leader")).upper(),
-            "monthly_target": fnum(row.get("monthly_target")), "created_at": now,
-        })
-    elif entity == "commission":
-        project_id = ""
-        if s(row.get("project")):
-            p = await db.projects.find_one({"name": s(row.get("project"))})
-            project_id = str(p["_id"]) if p else ""
-        await db.commission_rules.insert_one({
-            "name": s(row.get("name")), "level": s(row.get("level")) or "agent",
-            "rule_type": s(row.get("rule_type")) or "percentage", "value": fnum(row.get("value")),
-            "basis": s(row.get("basis")) or "sale_value", "project_id": project_id,
-            "active": True, "created_at": now,
-        })
-    elif entity == "sales":
+
+async def _ins_agents(row: dict):
+    code = s(row.get("agent_code")).upper()
+    team_id = ""
+    if s(row.get("team")):
+        t = await db.teams.find_one({"name": s(row.get("team"))})
+        team_id = str(t["_id"]) if t else ""
+    await db.agents.insert_one({
+        "agent_code": code, "name": s(row.get("name")), "mobile": s(row.get("mobile")),
+        "team_id": team_id, "designation": s(row.get("designation")),
+        "joining_date": s(row.get("joining_date")), "commission_plan": s(row.get("commission_plan")),
+        "status": s(row.get("status")) or "active", "created_at": _now(),
+    })
+    await ensure_agent_user(code, s(row.get("name")), s(row.get("password")))
+
+
+async def _ins_teams(row: dict):
+    await db.teams.insert_one({
+        "name": s(row.get("name")), "leader_code": s(row.get("leader")).upper(),
+        "monthly_target": fnum(row.get("monthly_target")), "created_at": _now(),
+    })
+
+
+async def _ins_commission(row: dict):
+    project_id = ""
+    if s(row.get("project")):
         p = await db.projects.find_one({"name": s(row.get("project"))})
-        if not p:
-            raise HTTPException(400, f"Project '{s(row.get('project'))}' not found")
-        data = {
-            "date": s(row.get("date"))[:10], "project_id": str(p["_id"]),
-            "plot_number": s(row.get("plot_number")), "customer_name": s(row.get("customer_name")),
-            "customer_mobile": s(row.get("customer_mobile")), "agent_code": s(row.get("agent")).upper(),
-            "team_id": "", "sale_amount": fnum(row.get("sale_amount")),
-            "booking_amount": fnum(row.get("booking_amount")),
-            "amount_collected": fnum(row.get("amount_collected")) if s(row.get("amount_collected")) else None,
-            "status": s(row.get("status")) or "booked",
-        }
-        await create_sale_record(data, created_by="bulk-upload")
-    elif entity == "payments":
+        project_id = str(p["_id"]) if p else ""
+    await db.commission_rules.insert_one({
+        "name": s(row.get("name")), "level": s(row.get("level")) or "agent",
+        "rule_type": s(row.get("rule_type")) or "percentage", "value": fnum(row.get("value")),
+        "basis": s(row.get("basis")) or "sale_value", "project_id": project_id,
+        "active": True, "created_at": _now(),
+    })
+
+
+async def _ins_sales(row: dict):
+    p = await db.projects.find_one({"name": s(row.get("project"))})
+    if not p:
+        raise HTTPException(400, f"Project '{s(row.get('project'))}' not found")
+    data = {
+        "date": s(row.get("date"))[:10], "project_id": str(p["_id"]),
+        "plot_number": s(row.get("plot_number")), "customer_name": s(row.get("customer_name")),
+        "customer_mobile": s(row.get("customer_mobile")), "agent_code": s(row.get("agent")).upper(),
+        "team_id": "", "sale_amount": fnum(row.get("sale_amount")),
+        "booking_amount": fnum(row.get("booking_amount")),
+        "amount_collected": fnum(row.get("amount_collected")) if s(row.get("amount_collected")) else None,
+        "status": s(row.get("status")) or "booked",
+    }
+    await create_sale_record(data, created_by="bulk-upload")
+
+
+async def _ins_payments(row: dict):
+    p = await db.projects.find_one({"name": s(row.get("project"))})
+    if not p:
+        raise HTTPException(400, f"Project '{s(row.get('project'))}' not found")
+    sale = await db.sales.find_one({"project_id": str(p["_id"]), "plot_number": s(row.get("plot_number")), "status": {"$ne": "cancelled"}})
+    if not sale:
+        raise HTTPException(400, f"No active sale for plot {s(row.get('plot_number'))}")
+    await record_payment({
+        "date": s(row.get("date"))[:10], "sale_id": str(sale["_id"]),
+        "amount": fnum(row.get("amount")), "mode": s(row.get("mode")) or "UPI",
+        "reference": s(row.get("reference")), "received_by": s(row.get("received_by")),
+    })
+
+
+async def _ins_salary(row: dict):
+    basic = fnum(row.get("basic"))
+    bonus = fnum(row.get("bonus"))
+    deduction = fnum(row.get("deduction"))
+    await db.salary.insert_one({
+        "month": s(row.get("month"))[:7], "employee": s(row.get("employee")),
+        "agent_code": s(row.get("agent_code")).upper(), "designation": s(row.get("designation")),
+        "basic": basic, "bonus": bonus, "deduction": deduction,
+        "net": round(basic + bonus - deduction, 2),
+        "payment_status": s(row.get("payment_status")) or "pending",
+        "payment_date": s(row.get("payment_date")), "created_at": _now(),
+    })
+
+
+async def _ins_expenses(row: dict):
+    project_id, project_name = "", ""
+    if s(row.get("project")):
         p = await db.projects.find_one({"name": s(row.get("project"))})
-        if not p:
-            raise HTTPException(400, f"Project '{s(row.get('project'))}' not found")
-        sale = await db.sales.find_one({"project_id": str(p["_id"]), "plot_number": s(row.get("plot_number")), "status": {"$ne": "cancelled"}})
-        if not sale:
-            raise HTTPException(400, f"No active sale for plot {s(row.get('plot_number'))}")
-        await record_payment({
-            "date": s(row.get("date"))[:10], "sale_id": str(sale["_id"]),
-            "amount": fnum(row.get("amount")), "mode": s(row.get("mode")) or "UPI",
-            "reference": s(row.get("reference")), "received_by": s(row.get("received_by")),
-        })
-    elif entity == "salary":
-        basic = fnum(row.get("basic"))
-        bonus = fnum(row.get("bonus"))
-        deduction = fnum(row.get("deduction"))
-        await db.salary.insert_one({
-            "month": s(row.get("month"))[:7], "employee": s(row.get("employee")),
-            "agent_code": s(row.get("agent_code")).upper(), "designation": s(row.get("designation")),
-            "basic": basic, "bonus": bonus, "deduction": deduction,
-            "net": round(basic + bonus - deduction, 2),
-            "payment_status": s(row.get("payment_status")) or "pending",
-            "payment_date": s(row.get("payment_date")), "created_at": now,
-        })
-    elif entity == "expenses":
-        project_id, project_name = "", ""
-        if s(row.get("project")):
-            p = await db.projects.find_one({"name": s(row.get("project"))})
-            if p:
-                project_id, project_name = str(p["_id"]), p["name"]
-        await db.expenses.insert_one({
-            "date": s(row.get("date"))[:10], "month": s(row.get("date"))[:7],
-            "category": s(row.get("category")), "description": s(row.get("description")),
-            "project_id": project_id, "project_name": project_name,
-            "amount": fnum(row.get("amount")), "mode": s(row.get("mode")) or "Cash",
-            "paid_by": s(row.get("paid_by")), "created_at": now,
-        })
+        if p:
+            project_id, project_name = str(p["_id"]), p["name"]
+    await db.expenses.insert_one({
+        "date": s(row.get("date"))[:10], "month": s(row.get("date"))[:7],
+        "category": s(row.get("category")), "description": s(row.get("description")),
+        "project_id": project_id, "project_name": project_name,
+        "amount": fnum(row.get("amount")), "mode": s(row.get("mode")) or "Cash",
+        "paid_by": s(row.get("paid_by")), "created_at": _now(),
+    })
+
+
+INSERTERS = {
+    "projects": _ins_projects,
+    "agents": _ins_agents,
+    "teams": _ins_teams,
+    "commission": _ins_commission,
+    "sales": _ins_sales,
+    "payments": _ins_payments,
+    "salary": _ins_salary,
+    "expenses": _ins_expenses,
+}
