@@ -1,0 +1,62 @@
+{
+  "summary": "Full-stack round 1 for NEST INFRA CRM. Backend: created pytest suite (71 tests, 4 files) covering auth/RBAC, projects/agents/teams CRUD, sales+commission+payment lifecycle, salary, expenses, dashboard, accounts summary, all 9 reports (json/csv/xlsx) and bulk upload preview/confirm -> 69 passed / 2 failed (97%). Frontend: Playwright E2E as admin and agent (NIA001) plus mobile 390x844 -> admin login/dashboard/KPIs/chart/top agents+teams OK; all 12 nav pages render error-free; new sale auto-updated inventory (115->114 avail, 5->6 booked), auto-computed commission (agent 2% + GV 10,000 fixed = 30,000; team leader 0.5% = 5,000), auto-created booking payment; duplicate plot rejected with toast; final payment flipped Booked->Sold and moved inventory booked->sold; commission Pay Agent worked (pending 5,000->0); salary net = 40k+5k-3k = 42,000; expense add updated summary cards; Accounts 2026-08 numbers consistent (profit = collections - commission - salary - expenses); Reports table + CSV(667B)/XLSX(5.4KB) downloads + profit-summary 4 rows; Admin Upload CSV preview/confirm imported 2 expenses and flagged duplicate salary row. Agent RBAC fully enforced in UI+API. All test data created was cleaned up; seed state restored.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "Playbook deviation: login never sets an httpOnly cookie (Set-Cookie empty). Token is returned in body only and the frontend keeps it in localStorage (XSS-exposed). get_current_user already reads request.cookies['access_token'], so only the login/logout response needs to set/clear the cookie (secure, httponly, samesite)."},
+      {"endpoint": "POST /api/auth/login", "issue": "Playbook deviation: no brute-force protection. 6 consecutive wrong-password attempts all return 401; expected lockout/429 after 5 failures."},
+      {"endpoint": "POST /api/admin/upload/{entity}/confirm", "issue": "Confirm step re-validates only required fields, not duplicates. Salary/projects/teams rows flagged as duplicates in preview will still be inserted if posted to confirm (UI filters them, API does not)."},
+      {"endpoint": "GET /api/sales, /api/payments, /api/projects, /api/reports/*", "issue": "No pagination/limit; endpoints load whole collections into memory (to_list(None)). Fine for seed data, will degrade with volume."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Expenses summary cards", "issue": "'Other' bucket math is wrong: other = total - marketing - projectExp double-subtracts rows that are both marketing-category AND project-linked (e.g. Google Ads 50,000 tagged to Nest Lake View). Observed Total 1,59,111 / Marketing 86,111 / Project 50,000 / Other 23,000 while the true non-marketing non-project sum is 73,000; the four cards do not reconcile.", "selector": "[data-testid=\"expenses-other\"]", "priority": "MEDIUM"},
+      {"component": "Dashboard (mobile 390x844)", "issue": "Recent Sales / Recent Payments DataTables are 587px wide inside the 390px viewport, causing 213px of page-level horizontal scroll (whole layout drifts sideways). The grid children need min-w-0 (or the table wrapper needs w-full overflow-x-auto with min-w-0) so the table scrolls internally like on Sales/Payments pages.", "selector": "[data-testid=\"recent-sales-table\"], [data-testid=\"recent-payments-table\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts console warning on first paint: 'The width(-1) and height(-1) of chart should be greater than 0' — ResponsiveContainer mounts before the h-72 wrapper has size; set minHeight/aspect or render after layout to silence it."]},
+      {"screen": "Reports", "issues": ["Month filter stays enabled for 'Monthly Profit Summary', but that report ignores the month and always returns every month — either disable the month input for profit-summary or honour the filter."]},
+      {"screen": "Sales / Payments / Reports headers", "issues": ["Empty native <input type=\"month\"> renders as '-------' placeholder which looks broken; consider defaulting to the current month (as Salary/Expenses/Accounts do) or labelling it 'All months'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_auth.py",
+    "/app/backend/tests/test_masters.py",
+    "/app/backend/tests/test_transactions.py",
+    "/app/backend/tests/test_insights.py",
+    "/app/backend/tests/test_uploads.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Set httpOnly/secure/samesite access_token cookie on POST /api/auth/login and clear it on /logout (backend already accepts cookie auth); keep Bearer fallback for the SPA.",
+    "Add failed-login throttling/lockout (5 attempts) on /api/auth/login.",
+    "Fix Expenses 'Other' card computation so Marketing + Project + Other == Total (exclude marketing rows from projectExp or compute other by explicit category/project predicate).",
+    "Fix mobile horizontal overflow on Dashboard recent-sales/recent-payments tables (add min-w-0 to grid children).",
+    "Re-check duplicates server-side inside /api/admin/upload/{entity}/confirm for salary/projects/teams.",
+    "Optional: disable the month filter for the profit-summary report or apply it."
+  ],
+  "critical_code_review_comments": [
+    "auth.py login returns the JWT in the body only; the httpOnly-cookie path in get_current_user is dead code today — align the two.",
+    "transactions.compute_commission treats a 'project' level rule with an empty project_id as applying to every project and adds it to the AGENT bucket; make the level/scope semantics explicit or validate project_id when level == 'project'.",
+    "insights.build_report loads all sales + payments (and, for profit-summary, per-month salary/expense queries in a Python loop) on every request — move month aggregation to a single Mongo aggregation pipeline before data grows.",
+    "uploads.insert_row bypasses the duplicate checks done in upload_preview; the confirm endpoint should re-run the same duplicate detection to stay idempotent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_auth.py",
+    "/app/backend/tests/test_masters.py",
+    "/app/backend/tests/test_transactions.py",
+    "/app/backend/tests/test_insights.py",
+    "/app/backend/tests/test_uploads.py"
+  ],
+  "success_rate": {"backend": "97% (69/71 pytest)", "frontend": "95% (all critical flows pass; 2 UI defects)"},
+  "seed_data_creation": "Temporary only, all removed after testing: sale on Nest Green Valley plots UI-xxxxx / TEST-xxxxxx, agent TST900, projects TEST_Project_A & TEST_UP_*, team TEST_Team, commission rules TEST_Rule/TEST_UI_Rule, salary TEST_Employee/TEST_UI_Emp, expenses paid_by TEST_UI/TEST_BULK. Verified after cleanup: Green Valley 115/5/0/120, Lake View 95/3/2/100, Sunrise 76/1/3/80, Aug-2026 expenses 1,48,000 and salaries 2,98,000 (original seed values).",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Admin nestinfradevelopers39@gmail.com / Admin@123; Agent NIA001 / nest@123 (both verified working). bcrypt hash verified to start with $2b$; seed_admin correctly re-hashes when ADMIN_PASSWORD changes; CORS_ORIGINS is explicit (no wildcard) with allow_credentials.",
+  "context_for_next_testing_agent": "Regression suite lives in /app/backend/tests (pytest.ini forces -n 2 --dist loadscope; run `cd /app/backend && python -m pytest tests/ -q`). Only 2 known failures, both intentional playbook checks: test_login_sets_httponly_cookie and test_brute_force_lockout — they should pass once auth is hardened. Tests are self-cleaning but use unique plot numbers (uuid) for sales; never reuse a fixed plot number. Frontend flows already verified end-to-end: admin dashboard, projects+detail dialog/map link, sale create/duplicate/delete, payment -> Sold flip, commission payout, salary, expenses, accounts, reports (incl. CSV/XLSX download via page.expect_download), admin bulk upload (write CSV to /tmp then set_input_files on [data-testid=upload-file-input]), agent RBAC + direct-URL guards, mobile drawer. When asserting mobile drawer nav use .last on [data-testid=nav-*] (the hidden desktop sidebar node is .first).",
+  "rca_of_the_issue": "Expenses 'Other': computed as total - marketing - projectExp, but the marketing and project sets overlap (a Google Ads expense linked to a project is counted in both), so the overlap is subtracted twice and Other under-reports by that amount. Mobile overflow: DataTable's overflow-x-auto wrapper sits inside a CSS grid column whose default min-width:auto lets the nowrap table expand the column to 587px, so the overflow escapes to <html> instead of scrolling inside the card; adding min-w-0 to the grid item fixes it (the Sales/Payments pages, where the table is a direct full-width child, show 0px page overflow)."
+}

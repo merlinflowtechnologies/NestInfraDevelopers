@@ -1,0 +1,153 @@
+{
+  "theme_strategy": {
+    "default": "light",
+    "rationale": "Real estate CRMs require prolonged viewing, heavy data entry, and reading dense tables (commissions, salaries, plots). A clean, paper-like light theme ensures minimal eye strain and maximum data legibility. Dark mode can be provided as an accessibility toggle."
+  },
+  "archetype": "Swiss & High-Contrast + Soft Utility",
+  "typography": {
+    "fonts": {
+      "headings": {
+        "family": "Outfit",
+        "import_url": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap",
+        "classes": "font-sans tracking-tight",
+        "usage": "Page titles, card headers, KPI values."
+      },
+      "body": {
+        "family": "IBM Plex Sans",
+        "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+        "classes": "font-sans leading-relaxed",
+        "usage": "Data tables, forms, labels, body copy."
+      },
+      "mono": {
+        "family": "IBM Plex Mono",
+        "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap",
+        "classes": "font-mono tracking-tight",
+        "usage": "Currency values (₹), plot dimensions, IDs, and financial figures."
+      }
+    },
+    "hierarchy_rules": [
+      "H1 (Page Title): text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900",
+      "H2 (Section/Card Title): text-lg sm:text-xl font-medium tracking-tight text-slate-800",
+      "Data/KPI Number: text-3xl sm:text-4xl font-bold font-mono tracking-tighter",
+      "Table Header: text-xs font-semibold tracking-[0.1em] uppercase text-slate-500",
+      "Table Data: text-sm font-medium text-slate-700",
+      "Currency: Use IBM Plex Mono for all ₹ amounts to ensure tabular alignment."
+    ]
+  },
+  "colors": {
+    "backgrounds": {
+      "page": "#F8FAFC", 
+      "surface": "#FFFFFF",
+      "surface_hover": "#F1F5F9"
+    },
+    "primary": {
+      "main": "#0F172A", 
+      "action": "#047857", 
+      "action_hover": "#065F46"
+    },
+    "text": {
+      "heading": "#0F172A",
+      "body": "#334155",
+      "muted": "#64748B"
+    },
+    "semantic": {
+      "available_paid": {"bg": "#DCFCE7", "text": "#166534", "border": "#86EFAC"},
+      "booked_pending": {"bg": "#FEF3C7", "text": "#92400E", "border": "#FDE047"},
+      "sold_expense": {"bg": "#FEE2E2", "text": "#B91C1C", "border": "#FCA5A5"},
+      "commission": {"bg": "#F3E8FF", "text": "#6B21A8", "border": "#D8B4FE"}
+    },
+    "rules": [
+      "NEVER use default Tailwind Blue as primary. Use Slate-900 for structure and Emerald-700 for key actions (representing land/money).",
+      "Status badges must use the semantic bg + semantic text + semantic border to be extremely clear at a glance.",
+      "NEVER use generic full-screen gradients."
+    ]
+  },
+  "visual_enhancers": {
+    "surfaces": "Use 'Grid Borders' and 'Crisp Edges' approach. Dashboards should be card-based with 1px border (`border-slate-200`) and minimal border-radius (`rounded-lg`).",
+    "shadows": "Remove default heavy shadows. Use `shadow-sm` for cards, and `shadow-md` only for floating elements (dropdowns, modals, toasts).",
+    "glassmorphism": "Avoid glassmorphism for this CRM. Data needs solid backgrounds to prevent visual refraction and maintain maximum legibility.",
+    "borders": "1px solid `border-slate-200` everywhere. Use `divide-y divide-slate-100` in lists to separate items cleanly."
+  },
+  "grids_layouts": {
+    "global_layout": "Master-Detail-Drawer or Left-Sidebar pattern. Top nav for mobile, collapsible left sidebar for desktop to maximize vertical space.",
+    "dashboard_grid": "High Density Grid. Base: `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`. Gap: `gap-4` or `gap-6`.",
+    "kpi_cards": "`col-span-1`. Should contain Title, Value (Mono font), and a small trend line/indicator.",
+    "charts": "`col-span-2` or `col-span-4`. Use Recharts. Keep them clean, remove heavy gridlines (use stroke-dasharray), and use semantic colors.",
+    "projects_inventory": "Provide both a Table view (dense data) and a Grid view (Cards with plot images, area, and status).",
+    "forms": "Use Shadcn Form components. Stack labels above inputs. Left-align everything."
+  },
+  "components": {
+    "charts": "Use Recharts (`recharts` package). Implement Bar charts for Monthly Sales and Line charts for Collections vs Expenses.",
+    "tables": "Use Shadcn Table. Must have hover states on rows (`hover:bg-slate-50`). Align numeric columns (like ₹ amounts) to the right.",
+    "badges": "Use Shadcn Badge. Customize to match Semantic colors.",
+    "dialogs": "Use Shadcn Dialog for the Admin Excel/CSV Bulk Upload preview.",
+    "toasts": "Use Sonner (`sonner` package) for success/error notifications (e.g., 'Agent created', 'Sales entry saved').",
+    "icons": "Use Phosphor Icons (`@phosphor-icons/react`). They look crisp and professional in dense dashboards. Standardize on 'regular' or 'duotone' weight.",
+    "buttons": "Pill-shaped or slightly rounded (`rounded-md`). Primary buttons use Emerald. Secondary use white bg with Slate border."
+  },
+  "motion": {
+    "interactions": "Micro-interactions on hover for all rows, buttons, and cards (`transition-all duration-200 ease-in-out`).",
+    "transitions": "Use `translate-y-[-2px] shadow-md` on hover for Project Cards.",
+    "loading": "Use skeleton loaders (`animate-pulse`) for dashboard charts and tables during data fetch."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text meets WCAG AA standards. Text on colored badges must be high contrast (e.g., dark green text on light green bg).",
+    "focus": "All interactive elements must have `focus:ring-2 focus:ring-emerald-500 focus:outline-none focus:ring-offset-1`.",
+    "aria": "Add `aria-label` to icon-only buttons (like edit/delete actions).",
+    "testing": "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"login-submit-button\"`)."
+  },
+  "media": {
+    "image_handling": "Images of plots/projects should be `object-cover` and constrained. E.g., `h-48 w-full object-cover rounded-t-lg`. Max height 80vh for modals.",
+    "agent_avatars": "Use circular avatars `h-10 w-10 rounded-full object-cover`."
+  },
+  "image_urls": {
+    "projects_plots": [
+      {
+        "url": "https://images.unsplash.com/photo-1772325482422-55bc8dd65662?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjByZXNpZGVudGlhbCUyMGhvdXNpbmclMjBkZXZlbG9wbWVudCUyMGFlcmlhbHxlbnwwfHx8fDE3ODcyMTAzNjJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Suburban neighborhood aerial - use for Project/Plot thumbnail."
+      },
+      {
+        "url": "https://images.pexels.com/photos/9595668/pexels-photo-9595668.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Aerial view of urban/residential - use for Project thumbnail."
+      }
+    ],
+    "agents": [
+      {
+        "url": "https://images.unsplash.com/photo-1610631066894-62452ccb927c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjByZWFsJTIwZXN0YXRlJTIwYWdlbnQlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODcyMTAzNjF8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional female agent portrait."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1647580427155-0483906cb9de?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjByZWFsJTIwZXN0YXRlJTIwYWdlbnQlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODcyMTAzNjF8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional male agent portrait."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "NOTE: The codebase uses `.js` and `.jsx` files, NOT `.tsx`. Do not create TypeScript files.",
+    "1. DEPENDENCIES: Install `@phosphor-icons/react`, `recharts`, `sonner`, `lucide-react` (if shadcn uses it), and `clsx`/`tailwind-merge`.",
+    "2. FONTS: Import 'Outfit', 'IBM Plex Sans', and 'IBM Plex Mono' in the main index.css or index.html.",
+    "3. LAYOUT: Create a persistent Left Sidebar (with a collapsible hamburger menu for mobile) using a grid or flex layout. The main content area should have a subtle off-white background (`bg-slate-50`).",
+    "4. ROLE-BASED UI: Mock a login state (`userRole: 'admin' | 'agent'`). Admin sees 'Company Expenses', 'Salary', 'Admin Bulk Upload'. Agent sees only 'My Dashboard', 'Projects Inventory', 'My Sales', 'My Commissions'.",
+    "5. DASHBOARD: Build 4 KPI cards at the top. Follow with two Recharts: a BarChart for 'Monthly Sales (₹)' and a LineChart for 'Collections vs Expenses'.",
+    "6. PROJECTS: Build an Inventory page. Use a Tabs component to switch between 'Grid View' (cards with images) and 'Table View' (dense data). Add Status Badges.",
+    "7. BULK UPLOAD: In the Admin section, add a 'Bulk Upload (Excel/CSV)' button that opens a Shadcn Dialog. Inside, show a drag-and-drop area, and a mock 'Preview Table' for validation before the user clicks 'Confirm & Upload'.",
+    "8. CURRENCY: Ensure every monetary value is prefixed with the Indian Rupee symbol (₹) and formatted with commas (e.g., ₹ 12,50,000).",
+    "9. EXPORT: Add an 'Export (CSV/Excel/Print)' Button with a Phosphor Download icon on all tabular data pages (Reports, Sales, Accounts).",
+    "10. DATA-TESTID: Ensure all buttons, inputs, links, and key metric cards have a `data-testid` attribute."
+  ],
+  "universal_guidelines": [
+    "You tend to converge toward generic, 'on distribution' outputs. Make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "You MUST NOT apply universal transition (e.g., `transition: all`). Always add transitions for specific interactive elements.",
+    "You MUST NOT center align the app container. Do not add `.App { text-align: center; }` in the css file.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations separate good from extraordinary.",
+    "Use `sonner` for toasts. Sonner component should be located in `/app/src/components/ui/sonner.jsx`.",
+    "CRITICAL: DO NOT use complete `transparent` background in header, overlays, or any surface that has content under it."
+  ]
+}
