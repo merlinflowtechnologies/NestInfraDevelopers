@@ -84,6 +84,9 @@ export default function Teams() {
               <div><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Bookings</p><p className="font-num font-bold text-slate-900">{t.team_bookings}</p></div>
               <div><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Collection</p><p className="font-num font-bold text-slate-900">{inr(t.team_collection)}</p></div>
               <div><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Commission</p><p className="font-num font-bold text-slate-900">{inr(t.team_commission)}</p></div>
+              {t.team_expenses !== undefined && (
+                <div className="col-span-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team Expenses (this month)</p><p className="font-num font-bold text-red-700" data-testid={`team-expenses-${t.id}`}>{inr(t.team_expenses || 0)}</p></div>
+              )}
             </div>
             <div className="mt-4 rounded-lg bg-slate-50 p-3">
               <div className="flex items-center justify-between text-xs">

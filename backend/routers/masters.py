@@ -208,10 +208,13 @@ async def list_teams(month: Optional[str] = None, user=Depends(get_current_user)
     month = month or datetime.now().strftime("%Y-%m")
     teams = [out(t) async for t in db.teams.find().sort("name", 1)]
     sales = await db.sales.find({"status": {"$ne": "cancelled"}}).to_list(None)
+    expenses = await db.expenses.find({"month": month}).to_list(None)
     agents = await db.agents.find().to_list(None)
     for t in teams:
         ts = [s for s in sales if s.get("team_id") == t["id"]]
         ms = [s for s in ts if s.get("month") == month]
+        if user.get("role") == "admin":
+            t["team_expenses"] = sum(e.get("amount", 0) for e in expenses if e.get("team_id") == t["id"])
         t["team_sales"] = sum(s["sale_amount"] for s in ms)
         t["team_sales_total"] = sum(s["sale_amount"] for s in ts)
         t["team_bookings"] = len(ms)

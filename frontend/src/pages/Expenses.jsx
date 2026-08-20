@@ -12,6 +12,7 @@ const MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card"];
 export default function Expenses() {
   const [rows, setRows] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [month, setMonth] = useState(currentMonth());
   const [form, setForm] = useState({ open: false, initial: null });
   const [del, setDel] = useState(null);
@@ -19,6 +20,7 @@ export default function Expenses() {
   const load = () => {
     api.get(`/expenses${month ? `?month=${month}` : ""}`).then((r) => setRows(r.data));
     api.get("/projects").then((r) => setProjects(r.data));
+    api.get("/teams").then((r) => setTeams(r.data));
   };
   useEffect(() => {
     load();
@@ -36,6 +38,7 @@ export default function Expenses() {
     { name: "amount", label: "Amount (₹)", type: "number", required: true },
     { name: "mode", label: "Payment Mode", type: "select", options: MODES.map((m) => ({ value: m, label: m })) },
     { name: "project_id", label: "Project (optional)", type: "select", options: projects.map((p) => ({ value: p.id, label: p.name })) },
+    { name: "team_id", label: "Team (optional)", type: "select", options: teams.map((t) => ({ value: t.id, label: t.name })) },
     { name: "paid_by", label: "Paid By" },
     { name: "description", label: "Description", type: "textarea", full: true },
   ];
@@ -43,7 +46,7 @@ export default function Expenses() {
   const submit = async (v) => {
     const payload = {
       date: v.date, category: v.category, amount: parseFloat(v.amount) || 0,
-      mode: v.mode || "Cash", project_id: v.project_id || "", paid_by: v.paid_by || "", description: v.description || "",
+      mode: v.mode || "Cash", project_id: v.project_id || "", team_id: v.team_id || "", paid_by: v.paid_by || "", description: v.description || "",
     };
     if (form.initial?.id) {
       await api.put(`/expenses/${form.initial.id}`, payload);
@@ -80,6 +83,7 @@ export default function Expenses() {
           )},
           { key: "description", label: "Description", render: (r) => r.description || "-" },
           { key: "project_name", label: "Project", render: (r) => r.project_name || "-" },
+          { key: "team_name", label: "Team", render: (r) => r.team_name || "-" },
           { key: "amount", label: "Amount", align: "right", render: (r) => <span className="font-semibold text-red-700">{inr(r.amount)}</span> },
           { key: "mode", label: "Mode" },
           { key: "paid_by", label: "Paid By" },
@@ -100,7 +104,7 @@ export default function Expenses() {
       <FormDialog
         open={form.open}
         onOpenChange={(o) => setForm({ open: o, initial: null })}
-        title={form.initial ? "Edit Expense" : "Add Expense"}
+        title={form.initial?.id ? "Edit Expense" : "Add Expense"}
         fields={fields}
         initial={form.initial}
         onSubmit={submit}

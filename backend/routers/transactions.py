@@ -413,6 +413,7 @@ class ExpenseIn(BaseModel):
     category: str
     description: str = ""
     project_id: str = ""
+    team_id: str = ""
     amount: float = 0
     mode: str = "Cash"
     paid_by: str = ""
@@ -426,6 +427,10 @@ async def expense_doc(body: dict) -> dict:
     if doc.get("project_id"):
         p = await db.projects.find_one({"_id": oid(doc["project_id"])})
         doc["project_name"] = p["name"] if p else ""
+    doc["team_name"] = ""
+    if doc.get("team_id"):
+        t = await db.teams.find_one({"_id": oid(doc["team_id"])})
+        doc["team_name"] = t["name"] if t else ""
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
     return doc
 
