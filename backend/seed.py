@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 
 from database import db
@@ -163,6 +164,52 @@ async def seed_sample_data():
             "paid_by": paid_by, "created_at": now,
         })
 
+    # Seed sample leads if empty
+    if await db.leads.count_documents({}) == 0:
+        p1 = await db.projects.find_one({"name": "Nest Green Valley"})
+        p2 = await db.projects.find_one({"name": "Nest Lake View Enclave"})
+        sample_leads = [
+            {
+                "name": "Karthik Varma", "mobile": "9848099001", "email": "karthik.v@gmail.com",
+                "project_id": str(p1["_id"]) if p1 else "", "project_name": p1["name"] if p1 else "",
+                "budget": 3500000, "preferred_plot_size": "200 sq.yds", "source": "Website",
+                "status": "site_visit_scheduled", "assigned_agent_code": "NIA001", "assigned_agent_name": "Rajesh Kumar",
+                "notes": "Looking for East facing plot near Kompally. Weekend visit requested.",
+                "created_at": now, "updated_at": now,
+                "site_visits": [
+                    {"id": "v1", "visit_date": f"{M0}-15 10:30 AM", "assigned_agent": "Rajesh Kumar", "notes": "Pickup arranged from Suchitra junction.", "status": "scheduled", "created_at": now}
+                ]
+            },
+            {
+                "name": "Srinivas Rao", "mobile": "9848099002", "email": "srinivas.rao@yahoo.com",
+                "project_id": str(p2["_id"]) if p2 else "", "project_name": p2["name"] if p2 else "",
+                "budget": 4500000, "preferred_plot_size": "267 sq.yds", "source": "Meta Ads",
+                "status": "negotiation", "assigned_agent_code": "NIA002", "assigned_agent_name": "Priya Sharma",
+                "notes": "Completed site visit last Sunday. Liked plot #45. Discussing payment milestones.",
+                "created_at": now, "updated_at": now,
+                "site_visits": [
+                    {"id": "v2", "visit_date": f"{M0}-08 03:00 PM", "assigned_agent": "Priya Sharma", "notes": "Customer visited with family. Very positive response.", "status": "completed", "created_at": now}
+                ]
+            },
+            {
+                "name": "Madhav Reddy", "mobile": "9848099003", "email": "madhav.r@outlook.com",
+                "project_id": str(p1["_id"]) if p1 else "", "project_name": p1["name"] if p1 else "",
+                "budget": 3000000, "preferred_plot_size": "167 sq.yds", "source": "Direct Walk-in",
+                "status": "contacted", "assigned_agent_code": "NIA003", "assigned_agent_name": "Arun Reddy",
+                "notes": "Shared layout map and pricing sheet on WhatsApp.",
+                "created_at": now, "updated_at": now, "site_visits": []
+            },
+            {
+                "name": "Venkatesh Naidu", "mobile": "9848099004", "email": "v.naidu@gmail.com",
+                "project_id": str(p2["_id"]) if p2 else "", "project_name": p2["name"] if p2 else "",
+                "budget": 5000000, "preferred_plot_size": "300 sq.yds", "source": "Channel Partner",
+                "status": "new", "assigned_agent_code": "NIA001", "assigned_agent_name": "Rajesh Kumar",
+                "notes": "NRI buyer looking for investment plot near Shamshabad.",
+                "created_at": now, "updated_at": now, "site_visits": []
+            }
+        ]
+        await db.leads.insert_many(sample_leads)
+
     creds = (
         "# Test Credentials\n\n"
         "## Admin\n"
@@ -178,5 +225,10 @@ async def seed_sample_data():
         "- POST /api/auth/logout\n"
         "- POST /api/auth/change-password\n"
     )
-    with open("/app/memory/test_credentials.md", "w") as fh:
-        fh.write(creds)
+    try:
+        mem_dir = Path(__file__).resolve().parent.parent / "memory"
+        mem_dir.mkdir(parents=True, exist_ok=True)
+        with open(mem_dir / "test_credentials.md", "w") as fh:
+            fh.write(creds)
+    except Exception:
+        pass

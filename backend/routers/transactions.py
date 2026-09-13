@@ -460,3 +460,238 @@ async def update_expense(eid: str, body: ExpenseIn, user=Depends(require_admin))
 async def delete_expense(eid: str, user=Depends(require_admin)):
     await db.expenses.delete_one({"_id": oid(eid)})
     return {"ok": True}
+
+
+# ---------------- Plot Layout & Matrix ----------------
+FACINGS = ["East", "West", "North", "South", "North-East (Corner)", "South-East", "North-West", "South-West"]
+
+
+@router.get("/projects/{pid}/plots")
+async def get_project_plots(pid: str, user=Depends(get_current_user)):
+    project = await db.projects.find_one({"_id": oid(pid)})
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    total_plots = int(project.get("total_plots", 100))
+    # Fetch all active sales for this project
+    sales = [s async for s in db.sales.find({"project_id": pid, "status": {"$ne": "cancelled"}})]
+    sales_by_plot = {str(s.get("plot_number")).strip(): s for s in sales}
+
+    # Plot size parsing
+    sizes_str = project.get("plot_sizes", "167, 200, 267 sq.yds")
+    size_list = [s.strip().replace("sq.yds", "").strip() for s in sizes_str.split(",") if s.strip()]
+    if not size_list:
+        size_list = ["200"]
+
+    plots = []
+    for i in range(1, total_plots + 1):
+        plot_no = str(i)
+        sale = sales_by_plot.get(plot_no)
+        facing = FACINGS[(i - 1) % len(FACINGS)]
+        size_sqyd = float(size_list[(i - 1) % len(size_list)])
+        price_per_yd = float(project.get("price", 15000))
+        total_val = round(size_sqyd * price_per_yd, 2)
+
+        if sale:
+            status = sale.get("status", "booked")
+            plots.append({
+                "plot_number": plot_no,
+                "status": status,
+                "facing": facing,
+                "size_sqyd": size_sqyd,
+                "price_per_yd": price_per_yd,
+                "total_price": float(sale.get("sale_amount", total_val)),
+                "customer_name": sale.get("customer_name", ""),
+                "customer_mobile": sale.get("customer_mobile", ""),
+                "agent_name": sale.get("agent_name", ""),
+                "agent_code": sale.get("agent_code", ""),
+                "booking_date": sale.get("date", ""),
+                "sale_id": str(sale.get("_id", "")),
+                "amount_collected": float(sale.get("amount_collected", 0)),
+                "balance": float(sale.get("balance", 0)),
+            })
+        else:
+            plots.append({
+                "plot_number": plot_no,
+                "status": "available",
+                "facing": facing,
+                "size_sqyd": size_sqyd,
+                "price_per_yd": price_per_yd,
+                "total_price": total_val,
+                "customer_name": "",
+                "customer_mobile": "",
+                "agent_name": "",
+                "agent_code": "",
+                "booking_date": "",
+                "sale_id": "",
+                "amount_collected": 0,
+                "balance": total_val,
+            })
+
+    return {
+        "project_id": pid,
+        "project_name": project.get("name", ""),
+        "total_plots": total_plots,
+        "available_plots": project.get("available_plots", 0),
+        "booked_plots": project.get("booked_plots", 0),
+        "sold_plots": project.get("sold_plots", 0),
+        "price_per_yd": project.get("price", 0),
+        "plots": plots,
+    }
+
+
+# ---------------- Payment Receipt Voucher ----------------
+def number_to_words(num: float) -> str:
+    """Helper to convert rupee amount to readable words format"""
+    units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
+    teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    num = int(num)
+    if num == 0:
+        return "Zero Rupees Only"
+
+    def two_digits(n):
+        if n < 10:
+            return units[n]
+        elif 10 <= n < 20:
+            return teens[n - 10]
+        else:
+            return tens[n // 10] + (" " + units[n % 10] if n % 10 != 0 else "")
+
+    def three_digits(n):
+        h = n // 100
+        rest = n % 100
+        res = ""
+        if h > 0:
+            res += units[h] + " Hundred"
+            if rest > 0:
+                res += " and "
+        if rest > 0:
+            res += two_digits(rest)
+        return res
+
+    crores = num // 10000000
+    rem = num % 10000000
+    lakhs = rem // 100000
+    rem = rem % 100000
+    thousands = rem // 1000
+    rem = rem % 1000
+
+    parts = []
+    if crores > 0:
+        parts.append(two_digits(crores) + " Crore")
+    if lakhs > 0:
+        parts.append(two_digits(lakhs) + " Lakh")
+    if thousands > 0:
+        parts.append(two_digits(thousands) + " Thousand")
+    if rem > 0:
+        parts.append(three_digits(rem))
+
+    return "Rupees " + " ".join(parts) + " Only"
+
+
+@router.get("/payments/{pay_id}/receipt")
+async def get_payment_receipt(pay_id: str, user=Depends(get_current_user)):
+    payment = await db.payments.find_one({"_id": oid(pay_id)})
+    if not payment:
+        raise HTTPException(404, "Payment record not found")
+
+    sale = None
+    if payment.get("sale_id"):
+        sale = await db.sales.find_one({"_id": oid(payment["sale_id"])})
+
+    project = None
+    if payment.get("project_id"):
+        project = await db.projects.find_one({"_id": oid(payment["project_id"])})
+
+    # Find total payments made for this sale
+    all_payments = []
+    total_paid = 0.0
+    if sale:
+        all_payments = [out(p) async for p in db.payments.find({"sale_id": str(sale["_id"])}).sort("date", 1)]
+        total_paid = sum(float(p.get("amount", 0)) for p in all_payments)
+
+    sale_amount = float(sale.get("sale_amount", 0)) if sale else float(payment.get("amount", 0))
+    balance_remaining = max(0.0, sale_amount - total_paid)
+
+    receipt_no = f"REC-{str(payment['_id'])[-6:].upper()}"
+
+    return {
+        "receipt_number": receipt_no,
+        "payment_id": str(payment["_id"]),
+        "date": payment.get("date", ""),
+        "amount": float(payment.get("amount", 0)),
+        "amount_in_words": number_to_words(payment.get("amount", 0)),
+        "mode": payment.get("mode", "UPI"),
+        "reference": payment.get("reference", ""),
+        "received_by": payment.get("received_by", "Admin"),
+        "customer_name": payment.get("customer_name", sale.get("customer_name", "") if sale else ""),
+        "customer_mobile": sale.get("customer_mobile", "") if sale else "",
+        "project_name": payment.get("project_name", project.get("name", "") if project else ""),
+        "project_location": project.get("location", "") if project else "Telangana",
+        "plot_number": payment.get("plot_number", ""),
+        "agent_name": sale.get("agent_name", "") if sale else "",
+        "agent_code": sale.get("agent_code", "") if sale else "",
+        "sale_total_amount": sale_amount,
+        "total_paid_to_date": total_paid,
+        "balance_remaining": balance_remaining,
+        "payment_history": all_payments,
+        "company": {
+            "name": "Nest Infra Developers Pvt. Ltd.",
+            "tagline": "Building Tomorrow's Infrastructure Today",
+            "address": "Plot #104, Cyber Towers Road, Madhapur, Hyderabad, Telangana - 500081",
+            "phone": "+91 98480 11000",
+            "email": "nestinfradevelopers39@gmail.com",
+            "website": "www.nestinfradevelopers.com",
+            "gstin": "36AAACN1234F1Z5",
+        }
+    }
+
+
+# ---------------- Cost Sheet Calculator ----------------
+class CostSheetIn(BaseModel):
+    project_id: str
+    size_sqyd: float
+    is_corner: bool = False
+    is_east_facing: bool = False
+    clubhouse_charges: float = 50000.0
+
+
+@router.post("/calculate-cost-sheet")
+async def calculate_cost_sheet(body: CostSheetIn, user=Depends(get_current_user)):
+    project = await db.projects.find_one({"_id": oid(body.project_id)})
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    base_rate = float(project.get("price", 15000))
+    premium_per_yd = 0.0
+    if body.is_corner:
+        premium_per_yd += 500.0
+    if body.is_east_facing:
+        premium_per_yd += 300.0
+
+    final_rate = base_rate + premium_per_yd
+    base_cost = round(body.size_sqyd * final_rate, 2)
+    infra_dev_charges = round(body.size_sqyd * 400.0, 2)  # 400 per sq yd
+    clubhouse = body.clubhouse_charges
+    gross_total = round(base_cost + infra_dev_charges + clubhouse, 2)
+    est_registration = round(gross_total * 0.075, 2)  # ~7.5% stamp duty & registration in Telangana
+    documentation = 10000.0
+    net_grand_total = round(gross_total + est_registration + documentation, 2)
+
+    return {
+        "project_name": project.get("name", ""),
+        "size_sqyd": body.size_sqyd,
+        "base_rate": base_rate,
+        "premium_rate": premium_per_yd,
+        "final_rate": final_rate,
+        "base_cost": base_cost,
+        "infra_dev_charges": infra_dev_charges,
+        "clubhouse_charges": clubhouse,
+        "gross_total": gross_total,
+        "est_registration_charges": est_registration,
+        "documentation_charges": documentation,
+        "net_grand_total": net_grand_total,
+    }
+

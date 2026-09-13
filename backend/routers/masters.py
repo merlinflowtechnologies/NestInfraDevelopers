@@ -33,6 +33,8 @@ class ProjectIn(BaseModel):
     plot_sizes: str = ""
     total_plots: int
     images: List[str] = []
+    layout_image: Optional[str] = ""
+    brochure_url: Optional[str] = ""
     description: str = ""
     map_url: str = ""
 
@@ -107,6 +109,7 @@ async def ensure_agent_user(code: str, name: str, password: str = ""):
             },
             "$setOnInsert": {
                 "password_hash": hash_password(pw),
+                "password_changed": False,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
         },
@@ -148,7 +151,8 @@ async def update_agent(aid: str, body: AgentIn, user=Depends(require_admin)):
     await db.agents.update_one({"_id": a["_id"]}, {"$set": doc})
     if pw:
         await db.users.update_one(
-            {"agent_code": a["agent_code"]}, {"$set": {"password_hash": hash_password(pw)}}
+            {"agent_code": a["agent_code"]},
+            {"$set": {"password_hash": hash_password(pw), "password_changed": False}}
         )
     await db.users.update_one({"agent_code": a["agent_code"]}, {"$set": {"name": body.name}})
     return out(await db.agents.find_one({"_id": a["_id"]}))

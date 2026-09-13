@@ -6,19 +6,21 @@ import pytest
 import requests
 from dotenv import dotenv_values
 
-frontend_env = dotenv_values("/app/frontend/.env")
-base_url = os.environ.get("REACT_APP_BACKEND_URL") or frontend_env.get("REACT_APP_BACKEND_URL")
-if not base_url:
-    raise RuntimeError("REACT_APP_BACKEND_URL missing")
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+frontend_env = dotenv_values(ROOT_DIR / "frontend" / ".env") if (ROOT_DIR / "frontend" / ".env").exists() else {}
+base_url = os.environ.get("REACT_APP_BACKEND_URL") or frontend_env.get("REACT_APP_BACKEND_URL") or "http://localhost:8000"
 BASE_URL = base_url.rstrip("/")
 
 
 def _creds():
-    p = Path("/app/memory/test_credentials.md")
-    content = p.read_text(encoding="utf-8")
-    email = re.search(r"(?im)^\s*[-*]?\s*Email:\s*(\S+)", content)
-    pwd = re.search(r"(?im)^\s*[-*]?\s*Password:\s*(\S+)", content)
-    return email.group(1), pwd.group(1)
+    p = ROOT_DIR / "memory" / "test_credentials.md"
+    if p.exists():
+        content = p.read_text(encoding="utf-8")
+        email = re.search(r"(?im)^\s*[-*]?\s*Email:\s*(\S+)", content)
+        pwd = re.search(r"(?im)^\s*[-*]?\s*Password:\s*(\S+)", content)
+        if email and pwd:
+            return email.group(1), pwd.group(1)
+    return os.environ.get("ADMIN_EMAIL", "nestinfradevelopers39@gmail.com"), os.environ.get("ADMIN_PASSWORD", "Admin@123")
 
 
 @pytest.fixture(scope="session")

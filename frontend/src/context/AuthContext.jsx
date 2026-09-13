@@ -9,14 +9,25 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // null = checking, false = logged out
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setUser(false);
+      return;
+    }
     api
       .get("/auth/me")
       .then((r) => setUser(r.data))
-      .catch(() => setUser(false));
+      .catch(() => {
+        localStorage.removeItem("token");
+        setUser(false);
+      });
   }, []);
 
   const login = async (identifier, password) => {
     const r = await api.post("/auth/login", { identifier, password });
+    if (r.data?.token) {
+      localStorage.setItem("token", r.data.token);
+    }
     setUser(r.data.user);
     return r.data.user;
   };
@@ -27,6 +38,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* session already gone */
     }
+    localStorage.removeItem("token");
     setUser(false);
     window.location.href = "/login";
   };

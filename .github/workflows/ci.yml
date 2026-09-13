@@ -1,0 +1,74 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-tests:
+    name: Backend Pytest Suite
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-xdist httpx requests
+
+      - name: Run Backend Tests
+        env:
+          MONGO_URL: mongodb://localhost:27017
+          DB_NAME: test_database
+          JWT_SECRET: test_jwt_secret_64_characters_long_for_ci_pipeline_verification_123
+          ADMIN_EMAIL: nestinfradevelopers39@gmail.com
+          ADMIN_PASSWORD: Admin@123
+          REACT_APP_BACKEND_URL: http://localhost:8000
+        run: |
+          cd backend
+          pytest -v
+
+  frontend-build:
+    name: Frontend Build & Bundle Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          yarn install --frozen-lockfile || yarn install
+
+      - name: Build Production Bundle
+        env:
+          REACT_APP_BACKEND_URL: ""
+          CI: false
+        run: |
+          cd frontend
+          yarn build

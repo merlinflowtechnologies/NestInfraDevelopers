@@ -71,6 +71,7 @@ def safe_user(user: dict) -> dict:
         "name": user.get("name", ""),
         "role": user.get("role", ""),
         "agent_code": user.get("agent_code", ""),
+        "password_changed": bool(user.get("password_changed", False)),
     }
 
 
@@ -107,33 +108,68 @@ async def login(body: LoginBody, request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     await db.login_attempts.delete_many({"identifier": attempt_key})
     token = create_token(str(user["_id"]), user.get("role", ""))
+    is_https = request.url.scheme == "https" or os.environ.get("ENVIRONMENT") == "production"
     response.set_cookie(
-        key="access_token", value=token, httponly=True, secure=True,
-        samesite="none", max_age=7 * 24 * 3600, path="/",
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=is_https,
+        samesite="none" if is_https else "lax",
+        max_age=7 * 24 * 3600,
+        path="/",
     )
     return {"token": token, "user": safe_user(user)}
 
 
 @auth_router.get("/me")
 async def me(user=Depends(get_current_user)):
+    user["password_changed"] = bool(user.get("password_changed", False))
     return user
 
 
 @auth_router.post("/logout")
-async def logout(response: Response, user=Depends(get_current_user)):
-    response.delete_cookie("access_token", path="/", httponly=True, secure=True, samesite="none")
+async def logout(request: Request, response: Response, user=Depends(get_current_user)):
+    is_https = request.url.scheme == "https" or os.environ.get("ENVIRONMENT") == "production"
+    response.delete_cookie(
+        "access_token",
+        path="/",
+        httponly=True,
+        secure=is_https,
+        samesite="none" if is_https else "lax",
+    )
     return {"ok": True}
 
 
 @auth_router.post("/change-password")
 async def change_password(body: ChangePasswordBody, user=Depends(get_current_user)):
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+    
     full = await db.users.find_one({"_id": ObjectId(user["_id"])})
+    if not full:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Enforce ONE-TIME password change rule for agents
+    if user.get("role") == "agent" and full.get("password_changed"):
+        raise HTTPException(
+            status_code=403,
+            detail="You have already changed your password once. To change it again, please contact management / domain admin."
+        )
+
     if not verify_password(body.old_password, full["password_hash"]):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
     await db.users.update_one(
-        {"_id": full["_id"]}, {"$set": {"password_hash": hash_password(body.new_password)}}
+        {"_id": full["_id"]},
+        {
+            "$set": {
+                "password_hash": hash_password(body.new_password),
+                "password_changed": True,
+                "password_changed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        }
     )
-    return {"ok": True}
+    return {"ok": True, "password_changed": True}
 
 
 async def seed_admin():

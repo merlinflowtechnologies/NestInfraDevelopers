@@ -54,7 +54,12 @@ export default function Login() {
               A simple CRM to track projects, agents, teams, sales, collections and commissions — built for real estate teams on the move.
             </p>
           </div>
-          <p className="text-xs text-slate-500">© 2026 Nest Infra Developers</p>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>© 2026 Nest Infra Developers</span>
+            <span className="text-slate-400">
+              Powered by <strong className="text-emerald-400 font-semibold">MerlinFlow Technologies Pvt. Ltd.</strong>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -67,15 +72,15 @@ export default function Login() {
             <p className="font-display text-base font-bold text-slate-900">NEST INFRA CRM</p>
           </div>
           <h2 className="font-display text-2xl font-semibold text-slate-900">Sign in</h2>
-          <p className="mt-1 text-sm text-slate-500">Admin uses email · Agents use Agent ID (e.g. NIA001)</p>
+          <p className="mt-1 text-sm text-slate-500">Enter your credentials to access your account</p>
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
-              <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email / Agent ID</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email or Login ID</Label>
               <Input
                 className="mt-1.5"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="you@company.com or NIA001"
+                placeholder="Enter email or Agent ID"
                 required
                 data-testid="login-identifier"
               />
@@ -106,6 +111,16 @@ export default function Login() {
               {busy ? "Signing in..." : "Sign in"}
             </Button>
           </form>
+
+          {/* MerlinFlow Technologies Credit */}
+          <div className="mt-8 pt-6 border-t border-slate-200 text-center">
+            <p className="text-[11px] text-slate-600">
+              Powered by{" "}
+              <span className="font-semibold text-slate-800 tracking-wide">
+                MerlinFlow Technologies Pvt. Ltd.
+              </span>
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -7,18 +7,19 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { errMsg } from "../lib/api";
+import ImageUploadField from "./ImageUploadField";
 
 export const inputCls =
   "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-1";
 
 export function PageHeader({ title, sub, children, testid }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-6" data-testid={testid}>
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
-        {sub && <p className="text-sm text-slate-500 mt-1">{sub}</p>}
+    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4 sm:mb-6" data-testid={testid}>
+      <div className="min-w-0">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 truncate">{title}</h1>
+        {sub && <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{sub}</p>}
       </div>
-      <div className="flex flex-wrap gap-2">{children}</div>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   );
 }
@@ -32,15 +33,15 @@ export function StatCard({ label, value, icon: Icon, sub, tone = "default", test
   };
   return (
     <div
-      className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md"
+      className="rounded-lg border border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm transition-shadow duration-200 hover:shadow-md min-w-0"
       data-testid={testid}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-        {Icon && <Icon className="h-4 w-4 text-slate-400" />}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 truncate">{label}</p>
+        {Icon && <Icon className="h-4 w-4 text-slate-400 shrink-0" />}
       </div>
-      <p className={`mt-2 text-2xl font-bold font-num tracking-tight ${tones[tone]}`}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      <p className={`mt-1 sm:mt-2 text-lg sm:text-2xl font-bold font-num tracking-tight truncate ${tones[tone]}`}>{value}</p>
+      {sub && <p className="mt-1 text-[11px] sm:text-xs text-slate-500 truncate">{sub}</p>}
     </div>
   );
 }
@@ -116,7 +117,7 @@ export function DataTable({ columns, rows, testid, onRowClick, empty = "No recor
   );
 }
 
-export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmit, submitLabel = "Save", testid }) {
+export function FormDialog({ open, onOpenChange, onClose, title, fields, initial, onSubmit, submitLabel = "Save", testid }) {
   const [values, setValues] = useState({});
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -124,12 +125,17 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
   }, [open, initial]);
   const set = (k, v) => setValues((p) => ({ ...p, [k]: v }));
 
+  const handleClose = (o) => {
+    if (onOpenChange) onOpenChange(o);
+    if (!o && onClose) onClose();
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
       await onSubmit(values);
-      onOpenChange(false);
+      handleClose(false);
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -138,7 +144,7 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid={testid}>
         <DialogHeader>
           <DialogTitle className="font-display text-xl">{title}</DialogTitle>
@@ -150,7 +156,17 @@ export function FormDialog({ open, onOpenChange, title, fields, initial, onSubmi
                 {fl.label}
                 {fl.required ? " *" : ""}
               </Label>
-              {fl.type === "select" ? (
+              {fl.type === "image" ? (
+                <div className="mt-1">
+                  <ImageUploadField
+                    value={values[fl.name] ?? ""}
+                    onChange={(val) => set(fl.name, val)}
+                    label={fl.label}
+                    hint={fl.hint}
+                    required={fl.required}
+                  />
+                </div>
+              ) : fl.type === "select" ? (
                 <select
                   className={`${inputCls} mt-1.5`}
                   value={values[fl.name] ?? ""}

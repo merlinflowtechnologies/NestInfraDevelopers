@@ -53,9 +53,9 @@ class TestAuth:
     def test_bcrypt_hash_format(self):
         import asyncio
         import sys
-        from dotenv import load_dotenv
-        load_dotenv("/app/backend/.env")
-        sys.path.insert(0, "/app/backend")
+        bdir = Path(__file__).resolve().parent.parent
+        load_dotenv(bdir / ".env")
+        sys.path.insert(0, str(bdir))
         from database import db
 
         async def _get():

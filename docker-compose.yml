@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # MongoDB Database Service
+  mongodb:
+    image: mongo:7.0
+    container_name: nest_crm_mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: crm_production
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nest_crm_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      DB_NAME: crm_production
+      JWT_SECRET: ${JWT_SECRET:-9f2c7a1e4b8d3f6a0c5e9b2d7f4a8c1e6b3d9f0a2c5e8b1d4f7a0c3e6b9d2f5a8c}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-nestinfradevelopers39@gmail.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:80,http://localhost}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # React Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ""
+    container_name: nest_crm_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+    driver: local
