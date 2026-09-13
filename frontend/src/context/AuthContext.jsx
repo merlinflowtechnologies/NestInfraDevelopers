@@ -43,5 +43,14 @@ export function AuthProvider({ children }) {
     window.location.href = "/login";
   };
 
-  return <AuthCtx.Provider value={{ user, login, logout }}>{children}</AuthCtx.Provider>;
+  const isAdmin = Boolean(user && user.role === "admin");
+  const isLead = Boolean(user && (user.role === "team_lead" || user.is_team_lead));
+  const isAgent = Boolean(user && user.role === "agent" && !user.is_team_lead);
+  const canManageTeam = Boolean(isAdmin || isLead);
+
+  return (
+    <AuthCtx.Provider value={{ user, isAdmin, isLead, isAgent, canManageTeam, login, logout }}>
+      {children}
+    </AuthCtx.Provider>
+  );
 }

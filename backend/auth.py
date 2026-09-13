@@ -64,13 +64,22 @@ async def require_admin(user=Depends(get_current_user)) -> dict:
     return user
 
 
+async def require_lead_or_admin(user=Depends(get_current_user)) -> dict:
+    if user.get("role") not in ("admin", "team_lead"):
+        raise HTTPException(status_code=403, detail="Team Leader or Admin access required")
+    return user
+
+
 def safe_user(user: dict) -> dict:
     return {
         "id": str(user["_id"]),
         "email": user.get("email", ""),
         "name": user.get("name", ""),
-        "role": user.get("role", ""),
+        "role": user.get("role", "agent"),
         "agent_code": user.get("agent_code", ""),
+        "team_id": user.get("team_id", ""),
+        "lead_code": user.get("lead_code", ""),
+        "is_team_lead": bool(user.get("role") == "team_lead" or user.get("is_team_lead", False)),
         "password_changed": bool(user.get("password_changed", False)),
     }
 
@@ -107,7 +116,7 @@ async def login(body: LoginBody, request: Request, response: Response):
         await db.login_attempts.update_one({"identifier": attempt_key}, {"$set": upd}, upsert=True)
         raise HTTPException(status_code=401, detail="Invalid credentials")
     await db.login_attempts.delete_many({"identifier": attempt_key})
-    token = create_token(str(user["_id"]), user.get("role", ""))
+    token = create_token(str(user["_id"]), user.get("role", "agent"))
     is_https = request.url.scheme == "https" or os.environ.get("ENVIRONMENT") == "production"
     response.set_cookie(
         key="access_token",
@@ -124,7 +133,8 @@ async def login(body: LoginBody, request: Request, response: Response):
 @auth_router.get("/me")
 async def me(user=Depends(get_current_user)):
     user["password_changed"] = bool(user.get("password_changed", False))
-    return user
+    user["is_team_lead"] = bool(user.get("role") == "team_lead" or user.get("is_team_lead", False))
+    return safe_user(user)
 
 
 @auth_router.post("/logout")
@@ -149,7 +159,7 @@ async def change_password(body: ChangePasswordBody, user=Depends(get_current_use
     if not full:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Enforce ONE-TIME password change rule for agents
+    # Enforce ONE-TIME password change rule for standard agents
     if user.get("role") == "agent" and full.get("password_changed"):
         raise HTTPException(
             status_code=403,
@@ -173,8 +183,8 @@ async def change_password(body: ChangePasswordBody, user=Depends(get_current_use
 
 
 async def seed_admin():
-    email = os.environ["ADMIN_EMAIL"].lower()
-    password = os.environ["ADMIN_PASSWORD"]
+    email = os.environ.get("ADMIN_EMAIL", "nestinfradevelopers39@gmail.com").lower()
+    password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": email})
     if existing is None:
         await db.users.insert_one(

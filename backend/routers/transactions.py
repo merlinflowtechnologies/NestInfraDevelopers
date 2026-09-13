@@ -191,8 +191,18 @@ async def list_sales(
     q = {}
     if user.get("role") == "agent":
         q["agent_code"] = user.get("agent_code")
+    elif user.get("role") == "team_lead":
+        lead_code = user.get("agent_code")
+        team_id = user.get("team_id", "")
+        # Find agents reporting to this lead
+        team_agents = [a["agent_code"] async for a in db.agents.find({"$or": [{"lead_code": lead_code}, {"team_id": team_id}, {"agent_code": lead_code}]})]
+        if agent_code and agent_code in team_agents:
+            q["agent_code"] = agent_code
+        else:
+            q["$or"] = [{"agent_code": {"$in": team_agents}}, {"leader_code": lead_code}]
     elif agent_code:
         q["agent_code"] = agent_code
+
     if month:
         q["month"] = month
     if project_id:
@@ -262,20 +272,51 @@ class PayCommissionIn(BaseModel):
     sale_id: str
     who: str = "agent"  # agent | team
     amount: float
+    notes: Optional[str] = ""
 
 
 @router.post("/commission/pay")
-async def pay_commission(body: PayCommissionIn, user=Depends(require_admin)):
+async def pay_commission(body: PayCommissionIn, user=Depends(get_current_user)):
+    if user.get("role") not in ("admin", "team_lead"):
+        raise HTTPException(403, "Only Admin and Team Leads can pay commission")
+
     sale = await db.sales.find_one({"_id": oid(body.sale_id)})
     if not sale:
         raise HTTPException(404, "Sale not found")
+    
+    # If team lead, verify permission over agent
+    if user.get("role") == "team_lead":
+        lead_code = user.get("agent_code")
+        agent = await db.agents.find_one({"agent_code": sale.get("agent_code")})
+        is_my_team = agent and (agent.get("lead_code") == lead_code or agent.get("agent_code") == lead_code or agent.get("team_id") == user.get("team_id"))
+        if not is_my_team and sale.get("leader_code") != lead_code:
+            raise HTTPException(403, "Access denied: this sale does not belong to your team")
+
     total_f = "agent_commission" if body.who == "agent" else "team_commission"
     paid_f = f"{total_f}_paid"
     pending = sale.get(total_f, 0) - sale.get(paid_f, 0)
     amount = min(body.amount, pending)
     if amount <= 0:
         raise HTTPException(400, "No pending commission")
+    
     await db.sales.update_one({"_id": sale["_id"]}, {"$inc": {paid_f: amount}})
+    
+    # Record commission payout audit log
+    await db.commission_payouts.insert_one({
+        "sale_id": str(sale["_id"]),
+        "project_name": sale.get("project_name", ""),
+        "plot_number": sale.get("plot_number", ""),
+        "agent_code": sale.get("agent_code", ""),
+        "agent_name": sale.get("agent_name", ""),
+        "who": body.who,
+        "amount": amount,
+        "paid_by": user.get("email") or user.get("agent_code", ""),
+        "paid_by_name": user.get("name", "Management"),
+        "notes": body.notes or "",
+        "paid_at": datetime.now(timezone.utc).isoformat(),
+        "month": datetime.now().strftime("%Y-%m"),
+    })
+
     return out(await db.sales.find_one({"_id": sale["_id"]}))
 
 

@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "../context/AuthContext";
+
 const STAGES = [
   { key: "new", label: "New Leads", color: "bg-blue-50 text-blue-800 border-blue-200" },
   { key: "contacted", label: "Contacted", color: "bg-purple-50 text-purple-800 border-purple-200" },
@@ -36,8 +38,8 @@ const STAGES = [
   { key: "lost", label: "Lost", color: "bg-rose-50 text-rose-800 border-rose-200" },
 ];
 
-export default function Leads({ user }) {
-  const isAdmin = user?.role === "admin";
+export default function Leads() {
+  const { user, isAdmin, isLead, canManageTeam } = useAuth();
   const [leads, setLeads] = useState([]);
   const [projects, setProjects] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -510,7 +512,7 @@ export default function Leads({ user }) {
               </div>
             </div>
 
-            {isAdmin && (
+            {canManageTeam && (
               <div className="space-y-1">
                 <Label className="text-xs">Assigned Agent</Label>
                 <Select
@@ -523,7 +525,7 @@ export default function Leads({ user }) {
                   <SelectContent>
                     {agents.map((ag) => (
                       <SelectItem key={ag.id} value={ag.agent_code}>
-                        {ag.name} ({ag.agent_code}) - {ag.designation}
+                        {ag.name} ({ag.agent_code}) {ag.role === "team_lead" ? "👑 Lead" : ""} - {ag.designation}
                       </SelectItem>
                     ))}
                   </SelectContent>

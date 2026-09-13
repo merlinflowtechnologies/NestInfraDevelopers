@@ -69,8 +69,17 @@ async def list_leads(
     user=Depends(get_current_user),
 ):
     query = {}
-    if user.get("role") != "admin":
+    if user.get("role") == "agent":
         query["assigned_agent_code"] = user.get("agent_code", "")
+    elif user.get("role") == "team_lead":
+        lead_code = user.get("agent_code")
+        team_id = user.get("team_id", "")
+        # Team lead sees leads assigned to their team agents or unassigned
+        member_codes = [a["agent_code"] async for a in db.agents.find({"$or": [{"lead_code": lead_code}, {"team_id": team_id}, {"agent_code": lead_code}]})]
+        if agent_code and agent_code in member_codes:
+            query["assigned_agent_code"] = agent_code
+        else:
+            query["$or"] = [{"assigned_agent_code": {"$in": member_codes}}, {"assigned_agent_code": ""}, {"assigned_agent_code": None}]
     elif agent_code:
         query["assigned_agent_code"] = agent_code
 
@@ -98,7 +107,7 @@ async def create_lead(body: LeadIn, user=Depends(get_current_user)):
             doc["project_name"] = p["name"]
 
     # Auto assign agent if created by agent
-    if user.get("role") != "admin" and not doc.get("assigned_agent_code"):
+    if user.get("role") == "agent" and not doc.get("assigned_agent_code"):
         doc["assigned_agent_code"] = user.get("agent_code", "")
         doc["assigned_agent_name"] = user.get("name", "")
     elif doc.get("assigned_agent_code") and not doc.get("assigned_agent_name"):
@@ -115,7 +124,8 @@ async def get_lead(lid: str, user=Depends(get_current_user)):
     doc = await db.leads.find_one({"_id": oid(lid)})
     if not doc:
         raise HTTPException(404, "Lead not found")
-    if user.get("role") != "admin" and doc.get("assigned_agent_code") != user.get("agent_code"):
+    
+    if user.get("role") == "agent" and doc.get("assigned_agent_code") != user.get("agent_code"):
         raise HTTPException(403, "Access denied")
     return out(doc)
 
@@ -125,7 +135,8 @@ async def update_lead(lid: str, body: LeadUpdate, user=Depends(get_current_user)
     lead = await db.leads.find_one({"_id": oid(lid)})
     if not lead:
         raise HTTPException(404, "Lead not found")
-    if user.get("role") != "admin" and lead.get("assigned_agent_code") != user.get("agent_code"):
+    
+    if user.get("role") == "agent" and lead.get("assigned_agent_code") != user.get("agent_code"):
         raise HTTPException(403, "Access denied")
 
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -134,9 +145,10 @@ async def update_lead(lid: str, body: LeadUpdate, user=Depends(get_current_user)
     if upd.get("project_id") and not upd.get("project_name"):
         p = await db.projects.find_one({"_id": oid(upd["project_id"])})
         if p:
-            upd["project_name"] = p["name"]
+            doc_pname = p["name"]
+            upd["project_name"] = doc_pname
 
-    if upd.get("assigned_agent_code") and not upd.get("assigned_agent_name"):
+    if upd.get("assigned_agent_code"):
         ag = await db.agents.find_one({"agent_code": upd["assigned_agent_code"]})
         if ag:
             upd["assigned_agent_name"] = ag["name"]

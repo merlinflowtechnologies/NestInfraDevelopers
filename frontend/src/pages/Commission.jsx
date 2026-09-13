@@ -144,16 +144,20 @@ export default function Commission() {
               {inr(r.team_commission - r.team_commission_paid)}
             </span>
           )},
-          ...(isAdmin ? [{ key: "actions", label: "", render: (r) => (
+          ...((isAdmin || isLead) ? [{ key: "actions", label: "Payout Actions", render: (r) => (
             <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
               <Button size="sm" variant="outline" data-testid={`pay-agent-${r.id}`} disabled={r.agent_commission - r.agent_commission_paid <= 0}
+                className="text-xs text-emerald-700 hover:bg-emerald-50 border-emerald-300"
                 onClick={() => setPay({ sale: r, who: "agent", amount: r.agent_commission - r.agent_commission_paid })}>
                 Pay Agent
               </Button>
-              <Button size="sm" variant="outline" data-testid={`pay-team-${r.id}`} disabled={r.team_commission - r.team_commission_paid <= 0}
-                onClick={() => setPay({ sale: r, who: "team", amount: r.team_commission - r.team_commission_paid })}>
-                Pay Team
-              </Button>
+              {isAdmin && (
+                <Button size="sm" variant="outline" data-testid={`pay-team-${r.id}`} disabled={r.team_commission - r.team_commission_paid <= 0}
+                  className="text-xs text-purple-700 hover:bg-purple-50 border-purple-300"
+                  onClick={() => setPay({ sale: r, who: "team", amount: r.team_commission - r.team_commission_paid })}>
+                  Pay Team/Lead
+                </Button>
+              )}
             </div>
           )}] : []),
         ]}

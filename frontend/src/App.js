@@ -16,8 +16,9 @@ import Expenses from "./pages/Expenses";
 import Accounts from "./pages/Accounts";
 import Reports from "./pages/Reports";
 import AdminPanel from "./pages/AdminPanel";
+import ErrorBoundary from "./components/ErrorBoundary";
 
-const Protected = ({ children, admin }) => {
+const Protected = ({ children, admin, leadOrAdmin }) => {
   const { user } = useAuth();
   if (user === null)
     return (
@@ -27,10 +28,10 @@ const Protected = ({ children, admin }) => {
     );
   if (!user) return <Navigate to="/login" replace />;
   if (admin && user.role !== "admin") return <Navigate to="/" replace />;
+  if (leadOrAdmin && user.role !== "admin" && user.role !== "team_lead" && !user.is_team_lead)
+    return <Navigate to="/" replace />;
   return children;
 };
-
-import ErrorBoundary from "./components/ErrorBoundary";
 
 function App() {
   return (
@@ -43,7 +44,7 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="leads" element={<Leads />} />
               <Route path="projects" element={<Projects />} />
-              <Route path="agents" element={<Protected admin><Agents /></Protected>} />
+              <Route path="agents" element={<Protected leadOrAdmin><Agents /></Protected>} />
               <Route path="teams" element={<Teams />} />
               <Route path="sales" element={<Sales />} />
               <Route path="payments" element={<Payments />} />

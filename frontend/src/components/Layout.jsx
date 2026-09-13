@@ -3,33 +3,46 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, Building2, Users, UsersRound, Handshake, IndianRupee,
   Percent, Wallet, Receipt, Calculator, FileBarChart, Upload, Menu, LogOut, Landmark, UserPlus,
-  SlidersHorizontal, KeyRound, ShieldCheck
+  SlidersHorizontal, KeyRound, ShieldCheck, UserCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { useAuth } from "../context/AuthContext";
 import ChangePasswordModal from "./ChangePasswordModal";
 
-const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
-  { to: "/leads", label: "Leads & Visits", icon: UserPlus, testid: "nav-leads" },
-  { to: "/projects", label: "Projects", icon: Building2, testid: "nav-projects" },
-  { to: "/agents", label: "Agents", icon: Users, admin: true, testid: "nav-agents" },
-  { to: "/teams", label: "Teams", icon: UsersRound, testid: "nav-teams" },
-  { to: "/sales", label: "Sales", icon: Handshake, testid: "nav-sales" },
-  { to: "/payments", label: "Payments", icon: IndianRupee, testid: "nav-payments" },
-  { to: "/commission", label: "Commission", icon: Percent, testid: "nav-commission" },
-  { to: "/salary", label: "Salary", icon: Wallet, admin: true, testid: "nav-salary" },
-  { to: "/expenses", label: "Expenses", icon: Receipt, admin: true, testid: "nav-expenses" },
-  { to: "/accounts", label: "Accounts", icon: Calculator, admin: true, testid: "nav-accounts" },
-  { to: "/reports", label: "Reports", icon: FileBarChart, testid: "nav-reports" },
-  { to: "/admin", label: "Admin Panel & Hub", icon: SlidersHorizontal, admin: true, testid: "nav-admin" },
-];
+function getNavItems(user) {
+  const isAdmin = user?.role === "admin";
+  const isLead = user?.role === "team_lead" || user?.is_team_lead;
+
+  return [
+    { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", visible: true },
+    { to: "/leads", label: "Leads & Visits", icon: UserPlus, testid: "nav-leads", visible: true },
+    { to: "/projects", label: "Projects", icon: Building2, testid: "nav-projects", visible: true },
+    {
+      to: "/agents",
+      label: isAdmin ? "Agents & Team Leads" : isLead ? "My Team (Agents)" : "My Profile",
+      icon: isLead ? UserCheck : Users,
+      testid: "nav-agents",
+      visible: isAdmin || isLead,
+    },
+    { to: "/teams", label: "Teams", icon: UsersRound, testid: "nav-teams", visible: true },
+    { to: "/sales", label: isLead ? "Team Sales" : "Sales", icon: Handshake, testid: "nav-sales", visible: true },
+    { to: "/payments", label: "Payments", icon: IndianRupee, testid: "nav-payments", visible: true },
+    { to: "/commission", label: isLead ? "Commission Hub" : "Commission", icon: Percent, testid: "nav-commission", visible: true },
+    { to: "/salary", label: "Salary", icon: Wallet, testid: "nav-salary", visible: isAdmin },
+    { to: "/expenses", label: "Expenses", icon: Receipt, testid: "nav-expenses", visible: isAdmin },
+    { to: "/accounts", label: "Accounts", icon: Calculator, testid: "nav-accounts", visible: isAdmin },
+    { to: "/reports", label: "Reports", icon: FileBarChart, testid: "nav-reports", visible: true },
+    { to: "/admin", label: "Admin Panel & Hub", icon: SlidersHorizontal, testid: "nav-admin", visible: isAdmin },
+  ];
+}
 
 function NavItems({ user, onNavigate, suffix = "" }) {
+  const items = getNavItems(user).filter((item) => item.visible);
+
   return (
     <nav className="flex-1 space-y-1 px-3 py-4">
-      {NAV.filter((n) => !n.admin || user.role === "admin").map((n) => (
+      {items.map((n) => (
         <NavLink
           key={n.to}
           to={n.to}
@@ -39,7 +52,7 @@ function NavItems({ user, onNavigate, suffix = "" }) {
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
               isActive
-                ? "bg-emerald-700 text-white"
+                ? "bg-emerald-700 text-white shadow-sm"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white"
             }`
           }
@@ -71,12 +84,18 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [pwModalOpen, setPwModalOpen] = useState(false);
 
+  const roleDisplay = user.role === "team_lead" || user.is_team_lead
+    ? "Team Leader"
+    : user.role === "admin"
+    ? "Master Admin"
+    : "Sales Agent";
+
   const userBlock = (suffix = "") => (
     <div className="border-t border-slate-800 p-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-white">{user.name}</p>
-          <p className="text-xs text-slate-400 capitalize">{user.role}{user.agent_code ? ` · ${user.agent_code}` : ""}</p>
+          <p className="text-xs text-emerald-400 font-medium">{roleDisplay}{user.agent_code ? ` · ${user.agent_code}` : ""}</p>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -130,7 +149,7 @@ export default function Layout() {
           </div>
           <div>
             <p className="font-display text-sm font-bold text-white leading-none">NEST INFRA CRM</p>
-            <p className="text-[9px] font-medium text-emerald-400 capitalize">{user.role}{user.agent_code ? ` · ${user.agent_code}` : ""}</p>
+            <p className="text-[9px] font-medium text-emerald-400">{roleDisplay}{user.agent_code ? ` · ${user.agent_code}` : ""}</p>
           </div>
         </div>
         <Sheet open={open} onOpenChange={setOpen}>
@@ -150,16 +169,23 @@ export default function Layout() {
         </Sheet>
       </div>
 
-      <main className="flex-1 md:pl-60 min-w-0 max-w-full overflow-x-hidden">
-        <div className="mx-auto max-w-7xl p-3 sm:p-5 lg:p-8 min-w-0">
+      {/* Main content */}
+      <main className="flex-1 md:pl-60 min-w-0">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <Outlet />
         </div>
       </main>
 
+      {/* Global Password Change Modal */}
       <ChangePasswordModal
         open={pwModalOpen}
         onOpenChange={setPwModalOpen}
-        user={user}
+        onSuccess={() => {
+          toast.success("Password updated successfully");
+          if (user.role === "agent") {
+            window.location.reload();
+          }
+        }}
       />
     </div>
   );
