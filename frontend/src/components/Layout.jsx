@@ -16,19 +16,25 @@ function getNavItems(user) {
 
   return [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", visible: true },
-    { to: "/leads", label: "Leads & Visits", icon: UserPlus, testid: "nav-leads", visible: true },
+    {
+      to: "/leads",
+      label: isAdmin ? "Leads & Visits" : "Team Leads Pipeline",
+      icon: UserPlus,
+      testid: "nav-leads",
+      visible: isAdmin || isLead, // Hidden from standard Sales Agents
+    },
     { to: "/projects", label: "Projects", icon: Building2, testid: "nav-projects", visible: true },
     {
       to: "/agents",
-      label: isAdmin ? "Agents & Team Leads" : isLead ? "My Team (Agents)" : "My Profile",
+      label: isAdmin ? "Staff & Hierarchy" : "My Team (Agents)",
       icon: isLead ? UserCheck : Users,
       testid: "nav-agents",
-      visible: isAdmin || isLead,
+      visible: isAdmin || isLead, // Hidden from standard Sales Agents
     },
-    { to: "/teams", label: "Teams", icon: UsersRound, testid: "nav-teams", visible: true },
-    { to: "/sales", label: isLead ? "Team Sales" : "Sales", icon: Handshake, testid: "nav-sales", visible: true },
+    { to: "/teams", label: "Teams", icon: UsersRound, testid: "nav-teams", visible: isAdmin || isLead },
+    { to: "/sales", label: isLead ? "Team Sales" : isAdmin ? "Sales" : "My Sales", icon: Handshake, testid: "nav-sales", visible: true },
     { to: "/payments", label: "Payments", icon: IndianRupee, testid: "nav-payments", visible: true },
-    { to: "/commission", label: isLead ? "Commission Hub" : "Commission", icon: Percent, testid: "nav-commission", visible: true },
+    { to: "/commission", label: isLead ? "Commission Hub" : isAdmin ? "Commission" : "My Commissions", icon: Percent, testid: "nav-commission", visible: true },
     { to: "/salary", label: "Salary", icon: Wallet, testid: "nav-salary", visible: isAdmin },
     { to: "/expenses", label: "Expenses", icon: Receipt, testid: "nav-expenses", visible: isAdmin },
     { to: "/accounts", label: "Accounts", icon: Calculator, testid: "nav-accounts", visible: isAdmin },

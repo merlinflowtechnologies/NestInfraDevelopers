@@ -42,10 +42,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Protected><Layout /></Protected>}>
               <Route index element={<Dashboard />} />
-              <Route path="leads" element={<Leads />} />
+              <Route path="leads" element={<Protected leadOrAdmin><Leads /></Protected>} />
               <Route path="projects" element={<Projects />} />
               <Route path="agents" element={<Protected leadOrAdmin><Agents /></Protected>} />
-              <Route path="teams" element={<Teams />} />
+              <Route path="teams" element={<Protected leadOrAdmin><Teams /></Protected>} />
               <Route path="sales" element={<Sales />} />
               <Route path="payments" element={<Payments />} />
               <Route path="commission" element={<Commission />} />

@@ -5,7 +5,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin, require_lead_or_admin
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -66,12 +66,10 @@ async def list_leads(
     status: Optional[str] = None,
     project_id: Optional[str] = None,
     agent_code: Optional[str] = None,
-    user=Depends(get_current_user),
+    user=Depends(require_lead_or_admin),
 ):
     query = {}
-    if user.get("role") == "agent":
-        query["assigned_agent_code"] = user.get("agent_code", "")
-    elif user.get("role") == "team_lead":
+    if user.get("role") == "team_lead":
         lead_code = user.get("agent_code")
         team_id = user.get("team_id", "")
         # Team lead sees leads assigned to their team agents or unassigned
@@ -93,7 +91,7 @@ async def list_leads(
 
 
 @router.post("")
-async def create_lead(body: LeadIn, user=Depends(get_current_user)):
+async def create_lead(body: LeadIn, user=Depends(require_lead_or_admin)):
     doc = body.model_dump()
     now = datetime.now(timezone.utc).isoformat()
     doc["created_at"] = now
@@ -106,11 +104,7 @@ async def create_lead(body: LeadIn, user=Depends(get_current_user)):
         if p:
             doc["project_name"] = p["name"]
 
-    # Auto assign agent if created by agent
-    if user.get("role") == "agent" and not doc.get("assigned_agent_code"):
-        doc["assigned_agent_code"] = user.get("agent_code", "")
-        doc["assigned_agent_name"] = user.get("name", "")
-    elif doc.get("assigned_agent_code") and not doc.get("assigned_agent_name"):
+    if doc.get("assigned_agent_code") and not doc.get("assigned_agent_name"):
         ag = await db.agents.find_one({"agent_code": doc["assigned_agent_code"]})
         if ag:
             doc["assigned_agent_name"] = ag["name"]
@@ -120,24 +114,18 @@ async def create_lead(body: LeadIn, user=Depends(get_current_user)):
 
 
 @router.get("/{lid}")
-async def get_lead(lid: str, user=Depends(get_current_user)):
+async def get_lead(lid: str, user=Depends(require_lead_or_admin)):
     doc = await db.leads.find_one({"_id": oid(lid)})
     if not doc:
         raise HTTPException(404, "Lead not found")
-    
-    if user.get("role") == "agent" and doc.get("assigned_agent_code") != user.get("agent_code"):
-        raise HTTPException(403, "Access denied")
     return out(doc)
 
 
 @router.put("/{lid}")
-async def update_lead(lid: str, body: LeadUpdate, user=Depends(get_current_user)):
+async def update_lead(lid: str, body: LeadUpdate, user=Depends(require_lead_or_admin)):
     lead = await db.leads.find_one({"_id": oid(lid)})
     if not lead:
         raise HTTPException(404, "Lead not found")
-    
-    if user.get("role") == "agent" and lead.get("assigned_agent_code") != user.get("agent_code"):
-        raise HTTPException(403, "Access denied")
 
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
